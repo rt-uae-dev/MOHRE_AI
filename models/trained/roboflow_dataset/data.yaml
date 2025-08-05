@@ -1,0 +1,20 @@
+train: train/images
+val: valid/images
+test: test/images
+
+names: 
+  0: EID1
+  1: EID2
+  2: Forms
+  3: N_ID
+  4: PP
+  5: VISA
+  6: attestation
+  7: attestation_label
+  8: certificate
+  9: employee_info
+  10: employee_sign
+  11: message page
+  12: passport page 1
+  13: passport page 2
+  14: random

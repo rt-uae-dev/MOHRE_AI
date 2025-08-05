@@ -1,0 +1,23 @@
+{
+  "attestation_numbers": {
+    "primary": null,
+    "secondary": null,
+    "receipt": null,
+    "label": null
+  },
+  "document_info": {
+    "type": "class_15",
+    "issue_date": null,
+    "expiry_date": null,
+    "has_official_stamp": false
+  },
+  "confidence": "medium",
+  "extraction_notes": [],
+  "recommendations": [],
+  "metadata": {
+    "document_type": "class_15",
+    "classification_confidence": 0.49526241421699524,
+    "detected_labels": 1,
+    "processing_method": "YOLO8 + ResNet + Document AI"
+  }
+}
