@@ -21,4 +21,11 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 from main_pipeline import main
 
 if __name__ == "__main__":
-    main() 
+    from datetime import datetime
+    import time
+
+    while True:
+        print(f"\n🔄 Starting processing cycle at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        main()
+        print("⏳ Sleeping for 5 minutes before next cycle...\n")
+        time.sleep(5 * 60)
