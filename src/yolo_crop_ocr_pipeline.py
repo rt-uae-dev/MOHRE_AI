@@ -16,7 +16,7 @@ try:
     print("✅ Document AI processor imported successfully")
 except ImportError as e:
     DOCUMENT_AI_AVAILABLE = False
-    print(f"⚠️ Document AI not available - will use Google Vision only: {e}")
+    print(f"⚠️ Document AI not available: {e}")
 
 # === LOAD .env VARIABLES ===
 load_dotenv()
@@ -29,99 +29,31 @@ VISION_CLIENT = vision.ImageAnnotatorClient()
 
 def run_enhanced_ocr(image_path: str) -> dict:
     """
-    Enhanced OCR using Document AI as primary method for most document types,
-    Google Vision as fallback for specific document types that often have OCR issues.
+    Run OCR using Google Document AI. No other OCR engines are used.
     Returns comprehensive OCR data with confidence scores.
     """
     filename = os.path.basename(image_path)
     print(f"🔍 Processing {filename} with Document AI (primary)...")
     
-    # Try Document AI first for all document types
+    # Run Document AI OCR if available
     if DOCUMENT_AI_AVAILABLE and DOCUMENT_AI_PROCESSOR.enabled:
         try:
             print("   📄 Processing with Document AI Document OCR Processor...")
             doc_ai_result = DOCUMENT_AI_PROCESSOR.process_document(image_path)
-            
+
             if "error" not in doc_ai_result:
                 print("   ✅ Document AI processing successful!")
-                
+
                 # Extract comprehensive fields based on document type
                 full_text = doc_ai_result.get('full_text', '')
                 document_type = DOCUMENT_AI_PROCESSOR.get_document_type(full_text)
                 extracted_fields = DOCUMENT_AI_PROCESSOR.extract_fields_by_document_type(full_text)
                 confidence = doc_ai_result.get('confidence', 0.0)
-                
+
                 print(f"   📋 Document Type: {document_type}")
                 print(f"   🎯 Confidence: {confidence:.2f}")
                 print(f"   📝 Extracted Fields: {len(extracted_fields)}")
-                
-                # Show key extracted fields
-                for field_name, field_value in extracted_fields.items():
-                    if field_value and field_value != "N/A":
-                        print(f"      - {field_name}: {field_value}")
-                
-                # Check if Document AI extracted important fields (like attestation numbers)
-                has_important_fields = any(
-                    field_name.lower() in ['attestation number', 'passport number', 'emirates id number', 'identity number', 'full name', 'date of birth', 'nationality']
-                    for field_name in extracted_fields.keys()
-                )
-                
-                # Check for specific document types that often have OCR issues
-                problematic_doc_types = ['visa', 'visa_cancellation', 'forms', 'work_permit_cancellation', 'submit_work_permit_cancellation', 'unknown']
-                is_problematic_doc_type = any(doc_type in filename.lower() for doc_type in problematic_doc_types)
-                
-                # Check if critical numbers are missing (UID, file numbers)
-                has_uid_or_file_numbers = any(
-                    field_name.lower() in ['uid number', 'identity number', 'file number', 'residence number']
-                    for field_name in extracted_fields.keys()
-                )
-                
-                should_fallback = False
-                
-                # Fallback conditions:
-                # 1. Document AI completely failed (no text and no important fields)
-                # 2. OR it's a problematic document type AND missing critical numbers
-                if (len(full_text.strip()) < 10 and not has_important_fields) or \
-                   (is_problematic_doc_type and not has_uid_or_file_numbers):
-                    should_fallback = True
-                
-                if should_fallback:
-                    if is_problematic_doc_type and not has_uid_or_file_numbers:
-                        print(f"   ⚠️ Document AI missing critical numbers (UID/file) for {document_type}, trying Google Vision...")
-                    else:
-                        print(f"   ⚠️ Document AI extracted very little text and no important fields, trying Google Vision...")
-                    vision_result = run_google_vision_ocr(image_path)
-                    
-                    # Compare results and use the better one
-                    vision_ocr_text = vision_result.get("ocr_text", "")
-                    
-                    # Check if Google Vision found UID or file numbers that Document AI missed
-                    vision_has_uid = any(keyword in vision_ocr_text.lower() for keyword in ['uid', 'رقم الهوية الفريد', '2111045'])
-                    vision_has_file_number = any(keyword in vision_ocr_text.lower() for keyword in ['101 / 2019', 'residence no', 'رقم الإقامة'])
-                    
-                    # Priority: If Google Vision has critical numbers that Document AI missed, use Google Vision
-                    if (is_problematic_doc_type and not has_uid_or_file_numbers) and (vision_has_uid or vision_has_file_number):
-                        print(f"   🔄 Google Vision found critical numbers (UID/file) that Document AI missed, using it")
-                        vision_result["ocr_method"] = "google_vision_fallback"
-                        vision_result["document_type"] = document_type
-                        vision_result["extracted_fields"] = extracted_fields
-                        vision_result["confidence"] = confidence
-                        return vision_result
-                    # Fallback: If Google Vision has significantly more text, use it
-                    elif len(vision_ocr_text) > len(full_text) * 2.0:  # Reduced threshold
-                        print(f"   🔄 Google Vision found significantly more text, using it")
-                        vision_result["ocr_method"] = "google_vision_fallback"
-                        vision_result["document_type"] = document_type
-                        vision_result["extracted_fields"] = extracted_fields
-                        vision_result["confidence"] = confidence
-                        return vision_result
-                    else:
-                        print(f"   ✅ Document AI result is better, keeping it")
-                elif has_important_fields:
-                    print(f"   ✅ Document AI extracted important fields, keeping it despite low confidence")
-                else:
-                    print(f"   ✅ Document AI extracted sufficient text, keeping it")
-                
+
                 return {
                     "ocr_text": full_text,
                     "confidence": confidence,
@@ -133,21 +65,19 @@ def run_enhanced_ocr(image_path: str) -> dict:
                 }
             else:
                 print(f"   ❌ Document AI failed: {doc_ai_result['error']}")
-                
         except Exception as e:
             print(f"   ❌ Document AI error: {e}")
-    
-    # Fallback to Google Vision only if Document AI is not available or failed
-    print("   🔄 Falling back to Google Vision...")
-    vision_result = run_google_vision_ocr(image_path)
-    
-    # Add metadata to indicate this was Google Vision fallback
-    vision_result["ocr_method"] = "google_vision_fallback"
-    vision_result["document_type"] = "unknown"
-    vision_result["extracted_fields"] = {}
-    vision_result["confidence"] = 0.0  # Google Vision doesn't provide confidence scores
-    
-    return vision_result
+
+    # Document AI unavailable or failed
+    return {
+        "ocr_text": "",
+        "confidence": 0.0,
+        "document_type": "unknown",
+        "extracted_fields": {},
+        "ocr_method": "document_ai_unavailable",
+        "text_blocks": [],
+        "page_count": 0,
+    }
 
 def preprocess_image_for_ocr(image_path: str) -> str:
     """
