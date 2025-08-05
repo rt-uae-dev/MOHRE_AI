@@ -6,8 +6,8 @@ New workflow:
 2. Convert PDF to JPG
 3. Classify through classifier.pt (ResNet)
 4. If certificate exists, ensure certificate_attestation page is classified
-5. Copy attestation_certificate page and compress first
-6. Run YOLO to crop the label out of certificate_attestation page
+5. Compress attestation page once for downstream processing
+6. Run YOLO to crop the label out of certificate_attestation page for OCR
 7. Run OCR for all documents
 """
 
@@ -207,27 +207,21 @@ def main():
                 except Exception as e:
                     print(f"⚠️ Error rotating {img_data['filename']}: {e}")
 
-            # === STEP 2.7: If ResNet detects attestation page, compress and copy to finished folder first ===
+            # === STEP 2.7: If ResNet detects attestation page, compress for downstream processing ===
             print("📋 Checking for attestation pages detected by ResNet...")
             attestation_images = [img for img in classified_images if img["label"] in ["certificate_attestation", "attestation_label"]]
-            
+
             for attestation_img in attestation_images:
                 try:
-                    # Compress attestation page first
+                    # Compress the full attestation page once and use the compressed version everywhere
                     compressed_path = compress_image_to_jpg(
                         attestation_img["path"],
                         os.path.join(TEMP_DIR, f"{os.path.splitext(os.path.basename(attestation_img['path']))[0]}_compressed.jpg")
                     )
-                    attestation_img["compressed_path"] = compressed_path
+                    # Store the compressed page for final saving and use it for further processing
+                    attestation_img["full_page_path"] = compressed_path
+                    attestation_img["path"] = compressed_path
                     print(f"✅ Compressed attestation page: {os.path.basename(attestation_img['path'])}")
-                    
-                    # Copy to finished folder immediately
-                    finished_folder = os.path.join(OUTPUT_DIR, subject_folder)
-                    os.makedirs(finished_folder, exist_ok=True)
-                    finished_path = os.path.join(finished_folder, f"{os.path.splitext(os.path.basename(attestation_img['path']))[0]}_attestation_label.jpg")
-                    shutil.copy2(compressed_path, finished_path)
-                    attestation_img["finished_path"] = finished_path
-                    print(f"✅ Copied attestation page to finished folder: {os.path.basename(finished_path)}")
                 except Exception as e:
                     print(f"❌ Error processing attestation {attestation_img['filename']}: {e}")
 
@@ -451,19 +445,18 @@ def main():
                     base = f"{first_name}_personal_photo"
                 elif doc_type == "certificate":
                     base = f"{first_name}_certificate"
-                elif doc_type == "certificate_attestation":
+                elif doc_type in ["certificate_attestation", "attestation_label"]:
+                    # Always save the full attestation page with a consistent name
                     base = f"{first_name}_certificate_attestation"
-                elif doc_type == "attestation_label":
-                    base = f"{first_name}_attestation_label"
                 elif doc_type == "residence_cancellation":
                     base = f"{first_name}_residence_cancellation"
                 else:
                     base = f"{first_name}_{doc_type}"
                 
                 # Use the appropriate path for saving
-                if img_data["label"] in ["certificate_attestation", "attestation_label"] and "finished_path" in img_data:
-                    # For attestation pages, use the already saved finished path
-                    save_path = img_data["finished_path"]
+                if img_data["label"] in ["certificate_attestation", "attestation_label"] and "full_page_path" in img_data:
+                    # For attestation pages, save the full page (not the cropped label)
+                    save_path = img_data["full_page_path"]
                 elif "cropped_path" in img_data:
                     save_path = img_data["cropped_path"]
                 elif "compressed_path" in img_data:
@@ -492,10 +485,9 @@ def main():
                         base = f"{first_name}_personal_photo"
                     elif doc_type == "certificate":
                         base = f"{first_name}_certificate"
-                    elif doc_type == "certificate_attestation":
+                    elif doc_type in ["certificate_attestation", "attestation_label"]:
+                        # Final saved file for attestation labels should be the full page
                         base = f"{first_name}_certificate_attestation"
-                    elif doc_type == "attestation_label":
-                        base = f"{first_name}_attestation_label"
                     elif doc_type == "residence_cancellation":
                         base = f"{first_name}_residence_cancellation"
                     else:
