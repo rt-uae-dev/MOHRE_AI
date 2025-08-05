@@ -1,26 +1,19 @@
-google-generativeai
-google-cloud-vision
+#google APIS
 google-cloud-documentai
-opencv-python
+google-cloud-vision
+google-generativeai
+
+# YOLO/ResNet dependencies
 numpy
-pytesseract
-Pillow
-ultralytics
+opencv-python
+pillow
 torch
 torchvision
-python-dotenv
+ultralytics
+
+# Tooling
 pdf2image
-google-cloud-documentai
-google-cloud-vision
-google-generativeai
-numpy
-opencv-python
-pdf2image
-pillow
 python-docx
 python-dotenv
-pytesseract
-torch
-torchvision
-ultralytics
 pytest
+
