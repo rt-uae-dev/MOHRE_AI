@@ -94,13 +94,14 @@ def main():
             if subject_folder in processed_folders:
                 print(f"⏭️ Skipping already processed folder: {subject_folder}")
                 continue
-                
+
             subject_path = os.path.join(download_dir, subject_folder)
             if not os.path.isdir(subject_path):
                 continue
 
             print(f"\n🔍 Processing folder: {subject_folder}")
-            
+            requested_service = "Unknown Service"
+
             # === STEP 2.1: Read email body.txt ===
             email_text_path = os.path.join(subject_path, "email_body.txt")
             email_text = ""
@@ -109,6 +110,15 @@ def main():
                     email_text = f.read()
                 print(f"📧 Email body loaded: {len(email_text)} characters")
 
+                # Detect requested MOHRE service from email body
+                try:
+                    from service_detector import detect_service_from_email
+                    requested_service = detect_service_from_email(email_text)
+                    print(f"🛠️ Detected service request: {requested_service}")
+                except Exception as e:
+                    requested_service = "Unknown Service"
+                    print(f"⚠️ Service detection failed: {e}")
+            
             # === STEP 2.2: Convert PDFs to JPGs ===
             print("🔄 Converting PDFs to JPGs...")
             all_image_paths = []
@@ -336,6 +346,12 @@ def main():
                 final_structured = result
                 gemini_response = ""
 
+            # Add detected service to structured output
+            try:
+                final_structured["Requested Service"] = requested_service
+            except Exception:
+                pass
+
             # === STEP 4: Save everything ===
             subject_output_dir = os.path.join(OUTPUT_DIR, subject_folder)
             os.makedirs(subject_output_dir, exist_ok=True)
@@ -368,12 +384,14 @@ def main():
                 print(f"⚠️ No full name found in structured data")
             
             master_text_file = os.path.join(subject_output_dir, f"{first_name}_COMPLETE_DETAILS.txt")
-            
+
             with open(master_text_file, "w", encoding="utf-8") as f:
                 f.write("=" * 80 + "\n")
                 f.write(f"COMPLETE DOCUMENT DETAILS FOR: {full_name}\n")
                 f.write("=" * 80 + "\n\n")
-                
+
+                f.write(f"Requested Service: {final_structured.get('Requested Service', 'Unknown Service')}\n\n")
+
                 # Personal Information Section
                 f.write("📋 PERSONAL INFORMATION\n")
                 f.write("-" * 40 + "\n")
