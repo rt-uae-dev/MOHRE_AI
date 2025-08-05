@@ -223,21 +223,15 @@ def main():
                 except Exception as e:
                     print(f"⚠️ Error rotating {img_data['filename']}: {e}")
 
-            # === STEP 2.7: If ResNet detects attestation page, compress for downstream processing ===
+            # === STEP 2.7: If ResNet detects attestation page, keep original for downstream processing ===
             print("📋 Checking for attestation pages detected by ResNet...")
             attestation_images = [img for img in classified_images if img["label"] in ["certificate_attestation", "attestation_label"]]
 
             for attestation_img in attestation_images:
                 try:
-                    # Compress the full attestation page once and use the compressed version everywhere
-                    compressed_path = compress_image_to_jpg(
-                        attestation_img["path"],
-                        os.path.join(TEMP_DIR, f"{os.path.splitext(os.path.basename(attestation_img['path']))[0]}_compressed.jpg")
-                    )
-                    # Store the compressed page for final saving and use it for further processing
-                    attestation_img["full_page_path"] = compressed_path
-                    attestation_img["path"] = compressed_path
-                    print(f"✅ Compressed attestation page: {os.path.basename(attestation_img['path'])}")
+                    # Use the original, uncompressed page for all downstream processing
+                    attestation_img["full_page_path"] = attestation_img["path"]
+                    print(f"ℹ️ Using uncompressed attestation page: {os.path.basename(attestation_img['path'])}")
                 except Exception as e:
                     print(f"❌ Error processing attestation {attestation_img['filename']}: {e}")
 
@@ -245,8 +239,7 @@ def main():
             print("✂️ Running YOLO cropping for ALL documents...")
             for img_data in classified_images:
                 try:
-                    # Use the path that was already processed (either compressed or original)
-                    # All images should already be compressed from the initial processing
+                    # Use the current image path (some may be uncompressed)
                     input_path = img_data["path"]
                     
                     # Run YOLO cropping for ALL documents
