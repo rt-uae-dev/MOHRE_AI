@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import platform
+import re
 from email_parser import fetch_and_store_emails
 from pdf_converter import convert_pdf_to_jpg
 from resnet18_classifier import classify_image_resnet
@@ -105,10 +106,15 @@ def main():
             # === STEP 2.1: Read email body.txt ===
             email_text_path = os.path.join(subject_path, "email_body.txt")
             email_text = ""
+            service_needed = "N/A"
             if os.path.exists(email_text_path):
                 with open(email_text_path, "r", encoding="utf-8") as f:
                     email_text = f.read()
                 print(f"📧 Email body loaded: {len(email_text)} characters")
+                match = re.search(r"(?i)service needed[:\-]\s*(.+)", email_text)
+                if match:
+                    service_needed = match.group(1).strip()
+                    print(f"🔧 Service needed detected: {service_needed}")
 
                 # Detect requested MOHRE service from email body
                 try:
@@ -367,7 +373,10 @@ def main():
             else:
                 mother_name = final_structured.get('Mother\'s Name', 'NOT FOUND')
                 print(f"🔍 Debug - final_structured is already dict, mother's name: {mother_name}")
-            
+
+            # Include detected service needed in structured data
+            final_structured["Service Needed"] = service_needed
+
             full_name = final_structured.get("Full Name", "")
             print(f"🔍 Debug - Full Name extracted: '{full_name}'")
             
@@ -383,9 +392,7 @@ def main():
                 f.write("=" * 80 + "\n")
                 f.write(f"COMPLETE DOCUMENT DETAILS FOR: {full_name}\n")
                 f.write("=" * 80 + "\n\n")
-
-                f.write(f"Requested Service: {final_structured.get('Requested Service', 'Unknown Service')}\n\n")
-
+                f.write(f"SERVICE NEEDED: {service_needed}\n\n")
                 # Personal Information Section
                 f.write("📋 PERSONAL INFORMATION\n")
                 f.write("-" * 40 + "\n")
