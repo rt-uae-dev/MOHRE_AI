@@ -2,7 +2,6 @@ import os
 import shutil
 from pdf2image import convert_from_path
 from PIL import Image, ImageOps, ImageChops
-import pytesseract
 import torch
 import torchvision.transforms as transforms
 from torchvision import models
