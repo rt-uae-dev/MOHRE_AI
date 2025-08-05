@@ -109,7 +109,6 @@ With Document AI Document OCR Processor, you should get:
 |--------|---------------------|----------|------------|
 | Google Vision | $1.50 | Medium | 0 min |
 | Document AI OCR | $1.50 | High | 30 min |
-| EasyOCR | Free | Low | 5 min |
 
 ## 🚀 Implementation Plan
 
