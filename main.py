@@ -6,6 +6,9 @@ Main Entry Point
 
 import sys
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Set Google API credentials automatically
 google_creds_path = os.path.join(os.path.dirname(__file__), 'config', 'GOOGLEAPI.json')

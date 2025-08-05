@@ -19,13 +19,7 @@ from dotenv import load_dotenv
 from google_vision_orientation_detector import rotate_if_needed
 
 # Load environment variables
-# load_dotenv()  # Commented out due to encoding issues
-
-# Set environment variables directly
-os.environ['GOOGLE_API_KEY'] = 'AIzaSyBlf5SEwOFIFf80-Z7B38XEbKUqr1wLLRg'
-os.environ['GEMINI_API_KEY'] = 'AIzaSyBlf5SEwOFIFf80-Z7B38XEbKUqr1wLLRg'
-os.environ['GOOGLE_CLOUD_PROJECT_ID'] = '842132862003'
-os.environ['DOCUMENT_AI_PROCESSOR_ID'] = 'c36524c4040096d1'
+load_dotenv()
 
 # Set Google Application Credentials for Document AI
 google_creds_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'GOOGLEAPI.json')

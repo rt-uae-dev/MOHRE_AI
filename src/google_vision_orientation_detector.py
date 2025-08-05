@@ -9,6 +9,9 @@ import base64
 import json
 import google.generativeai as genai
 import cv2
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def ask_gemini_if_needs_rotation(image_path: str) -> dict:
     """

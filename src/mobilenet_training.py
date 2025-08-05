@@ -7,10 +7,14 @@ from torch.utils.data import DataLoader
 import torch.nn as nn
 import torch.optim as optim
 from datetime import datetime
+from pathlib import Path
+from dotenv import load_dotenv
 
 # Config
-DATA_DIR = "C:/Users/Husai/Desktop/mohre-email-parser/dataset"
-MODEL_SAVE_PATH = "model_classifier.pt"
+load_dotenv()
+BASE_DIR = Path(__file__).resolve().parents[1]
+DATA_DIR = os.getenv("DATA_DIR", str(BASE_DIR / "data" / "dataset"))
+MODEL_SAVE_PATH = os.getenv("MODEL_SAVE_PATH", "model_classifier.pt")
 BATCH_SIZE = 8
 EPOCHS = 15
 LEARNING_RATE = 0.001

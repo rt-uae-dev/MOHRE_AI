@@ -1,3 +1,16 @@
+google-generativeai
+google-cloud-vision
+google-cloud-documentai
+opencv-python
+numpy
+pytesseract
+Pillow
+ultralytics
+torch
+torchvision
+python-dotenv
+easyocr
+pdf2image
 google-cloud-documentai
 google-cloud-vision
 google-generativeai

@@ -61,7 +61,7 @@ Document AI should extract structured data like:
 The Document AI results can be integrated into your existing pipeline by:
 
 1. **Replacing Google Vision OCR** with Document AI for passport processing
-2. **Using Document AI entities** instead of GPT parsing for structured fields
+2. **Using Document AI entities** for structured fields
 3. **Falling back to Google Vision** if Document AI fails
 4. **Combining both approaches** for maximum accuracy
 

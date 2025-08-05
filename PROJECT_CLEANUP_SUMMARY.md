@@ -39,7 +39,7 @@ MOHRE/
 - ✅ **Moved results files** to appropriate data directories
 
 #### **2. File Renaming**
-- ✅ `NEW PASSPORT GOOGLE GPT OCR AND REASNING.py` → `passport_ocr_processor.py`
+- ✅ `NEW PASSPORT GOOGLE OCR AND REASONING.py` → `passport_ocr_processor.py`
 - ✅ `AI TRAINING MOBILENET.py` → `mobilenet_training.py`
 - ✅ `classifer.py` → `classifier.py` (fixed typo)
 - ✅ `process_documents_v_5.py` → `document_processor_v5.py`
