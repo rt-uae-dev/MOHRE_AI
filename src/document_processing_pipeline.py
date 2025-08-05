@@ -255,11 +255,11 @@ def validate_document_misclassification(resnet_label: str, ocr_text: str, yolo_l
 def classify_and_ocr(image_path: str, temp_dir: str):
     """
     Full image pipeline: crop with YOLO, OCR with Document AI (primary) + Google Vision (fallback),
-    rotate if needed, classify with ResNet, fallback to GPT if needed.
+    rotate if needed, classify with ResNet, fallback to Gemini if needed.
     Returns:
         - rotated image path
         - vision_data: {ocr_text, angle, labels, document_type, extracted_fields, confidence}
-        - final label (resnet or GPT fallback)
+        - final label (resnet or Gemini fallback)
     """
     print(f"\n🔁 Processing: {os.path.basename(image_path)}")
 

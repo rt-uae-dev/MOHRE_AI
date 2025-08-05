@@ -11,9 +11,10 @@ import base64
 import google.generativeai as genai
 from PIL import Image
 import io
+from dotenv import load_dotenv
 
 # Configure Google Gemini API
-import os
+load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Only rotate these document types

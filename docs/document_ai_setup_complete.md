@@ -5,7 +5,7 @@
 **Current Issue:** The pipeline extracts "INDIA" as Passport Issue Place instead of "DUBAI"
 - Individual passport processing shows "DUBAI" 
 - Final structuring step overrides with "INDIA"
-- Google Vision + GPT approach is unreliable for structured fields
+- Google Vision approach is unreliable for structured fields
 
 **Solution:** Google Document AI for structured document processing
 
@@ -37,7 +37,6 @@ Add these to your `.env` file:
 EMAIL_ADDRESS=your-email@domain.com
 EMAIL_PASSWORD=your-password
 IMAP_SERVER=imap.gmail.com
-OPENAI_API_KEY=your-openai-key
 GOOGLE_APPLICATION_CREDENTIALS=config/GOOGLEAPI.json
 
 # New Document AI variables
@@ -92,7 +91,7 @@ Document Type → Processing Method
 1. **Update main pipeline** to use Document AI for ALL documents
 2. **Add confidence score validation**
 3. **Implement fallback to Google Vision**
-4. **Use Document AI OCR** + GPT for field extraction
+4. **Use Document AI OCR** for field extraction
 5. **Add certificate-specific field extraction**
 
 ## 📊 Expected Results

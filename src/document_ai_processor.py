@@ -7,6 +7,9 @@ Handles structured document processing using Document OCR Processor
 import os
 import json
 from typing import Dict, List, Optional, Tuple
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class DocumentAIProcessor:
     """Google Document AI processor using Document OCR Processor"""

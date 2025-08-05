@@ -36,12 +36,12 @@ def analyze_current_issue():
             print(f"Passport Number: {data.get('Passport Number', 'Not found')}")
             print(f"Full Name: {data.get('Full Name', 'Not found')}")
     
-    # Check GPT response
-    passport_1_gpt_path = os.path.join(base_path, "YOGESHKUMAR_passport_1_gpt_response.txt")
-    if os.path.exists(passport_1_gpt_path):
-        print("\n3. GPT Response for Passport 1:")
+    # Check Gemini response
+    passport_1_gemini_path = os.path.join(base_path, "YOGESHKUMAR_passport_1_gemini_response.txt")
+    if os.path.exists(passport_1_gemini_path):
+        print("\n3. Gemini Response for Passport 1:")
         print("-" * 40)
-        with open(passport_1_gpt_path, 'r', encoding='utf-8') as f:
+        with open(passport_1_gemini_path, 'r', encoding='utf-8') as f:
             content = f.read()
             # Extract the JSON part
             if "Passport Issue Place" in content:
@@ -50,7 +50,7 @@ def analyze_current_issue():
                     end = content.find('",', start)
                     if end != -1:
                         issue_place_line = content[start:end+2]
-                        print(f"GPT extracted: {issue_place_line}")
+                        print(f"Gemini extracted: {issue_place_line}")
     
     # Analysis
     print("\n4. Issue Analysis:")
@@ -65,7 +65,7 @@ def analyze_current_issue():
     print("✅ Pre-trained for identity documents")
     print("✅ Structured field extraction with confidence scores")
     print("✅ Better handling of 'Place of Issue' field")
-    print("✅ No dependency on GPT parsing for structured fields")
+    print("✅ No dependency on LLM parsing for structured fields")
     print("✅ Higher accuracy for passport processing")
     
     # Setup requirements

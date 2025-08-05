@@ -4,11 +4,16 @@ from torchvision import models
 from PIL import Image
 from pdf2image import convert_from_path
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 
 # === CONFIG ===
-MODEL_PATH = "model_classifier.pt"  # Updated model path
+load_dotenv()
+BASE_DIR = Path(__file__).resolve().parents[1]
+MODEL_PATH = os.getenv("MODEL_PATH", "model_classifier.pt")  # Updated model path
 IMG_SIZE = 224
-ROOT_DIR = "C:/Users/Husai/Desktop/mohre-email-parser/downloads"
+ROOT_DIR = Path(os.getenv("ROOT_DIR", BASE_DIR / "data" / "raw" / "downloads"))
+DATASET_DIR = Path(os.getenv("DATASET_DIR", BASE_DIR / "data" / "dataset"))
 TEMP_JPG_PATH = "temp_passport_page.jpg"
 
 # === Disable DecompressionBombWarning ===
@@ -17,8 +22,8 @@ Image.MAX_IMAGE_PIXELS = None
 # === Load Model ===
 # Discover classes from training (assumes order matches training)
 CLASS_NAMES = sorted([
-    folder for folder in os.listdir("C:/Users/Husai/Desktop/mohre-email-parser/dataset")
-    if os.path.isdir(os.path.join("C:/Users/Husai/Desktop/mohre-email-parser/dataset", folder))
+    folder for folder in os.listdir(DATASET_DIR)
+    if os.path.isdir(os.path.join(DATASET_DIR, folder))
 ])
 
 model = models.resnet18()
@@ -35,15 +40,15 @@ transform = transforms.Compose([
 
 # === Walk through all folders and PDFs ===
 for folder in os.listdir(ROOT_DIR):
-    folder_path = os.path.join(ROOT_DIR, folder)
-    if not os.path.isdir(folder_path):
+    folder_path = ROOT_DIR / folder
+    if not folder_path.is_dir():
         continue
 
     for file in os.listdir(folder_path):
         if file.lower().endswith(".pdf"):
-            pdf_path = os.path.join(folder_path, file)
+            pdf_path = folder_path / file
             try:
-                pages = convert_from_path(pdf_path, dpi=300, first_page=1, last_page=1)
+                pages = convert_from_path(str(pdf_path), dpi=300, first_page=1, last_page=1)
                 pages[0].save(TEMP_JPG_PATH, 'JPEG')
 
                 image = Image.open(TEMP_JPG_PATH).convert("RGB")

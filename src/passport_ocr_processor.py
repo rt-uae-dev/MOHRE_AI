@@ -2,17 +2,15 @@ import os
 import io
 from dotenv import load_dotenv
 from google.cloud import vision
-from openai import OpenAI
+import google.generativeai as genai
+from pathlib import Path
 
 # === Step 1: Load environment variables from .env ===
 load_dotenv()
 
 # ✅ Set credentials from environment
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-openai_api_key = os.getenv("OPENAI_API_KEY")
-
-# Initialize OpenAI client
-client = OpenAI(api_key=openai_api_key)
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # === Step 2: Use Google Vision to extract text from image ===
 def extract_text_with_google_vision(image_path):
@@ -30,10 +28,9 @@ def extract_text_with_google_vision(image_path):
 
     return texts[0].description.strip()
 
-# === Step 3: Ask GPT-4o to extract structured passport fields ===
-def ask_gpt_to_structure_passport_data(ocr_text):
-    system_message = "You are a smart assistant that extracts structured fields from passport OCR."
-    user_prompt = f"""
+# === Step 3: Use Gemini to extract structured passport fields ===
+def ask_gemini_to_structure_passport_data(ocr_text):
+    prompt = f"""
 Given the OCR text of a passport, extract the following fields and return them as a JSON object:
 
 - Full Name
@@ -50,28 +47,23 @@ OCR TEXT:
 {ocr_text}
 """
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": user_prompt}
-        ],
-        temperature=0
-    )
-
-    return response.choices[0].message.content.strip()
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    response = model.generate_content(prompt)
+    return response.text.strip()
 
 # === Step 4: Run everything ===
 def main():
-    # 🖼️ Update this to your image filename
-    image_path = r"C:\Users\Husai\Desktop\mohre-email-parser\COMPLETED\passport_1\Alwin John Passport Copy_page_1_1_1_1_crop2.jpg"
+    # 🖼️ Image path can be configured via environment variable
+    base_dir = Path(__file__).resolve().parents[1]
+    default_path = base_dir / "data" / "processed" / "COMPLETED" / "passport_1" / "sample_passport.jpg"
+    image_path = os.getenv("PASSPORT_IMAGE_PATH", str(default_path))
 
     print("🔍 Extracting text with Google Vision...")
     ocr_text = extract_text_with_google_vision(image_path)
     print("\n🧾 OCR Result Preview:\n", ocr_text[:500], "\n...")
 
-    print("🤖 Sending to GPT-4o for field extraction...")
-    structured_output = ask_gpt_to_structure_passport_data(ocr_text)
+    print("🤖 Sending to Gemini for field extraction...")
+    structured_output = ask_gemini_to_structure_passport_data(ocr_text)
     print("\n✅ Extracted Passport Fields:\n", structured_output)
 
 if __name__ == "__main__":

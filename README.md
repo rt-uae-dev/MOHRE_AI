@@ -2,6 +2,27 @@
 
 A comprehensive document processing system for MOHRE (Ministry of Human Resources and Emiratisation) applications with **Document AI integration** for enhanced OCR accuracy.
 
+## 🚀 Installation
+
+1. Create and activate a virtual environment
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+   ```
+2. Install dependencies
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Configure environment variables
+   ```bash
+   cp .env.example .env
+   # edit .env with your API keys and project IDs
+   ```
+4. Run the pipeline
+   ```bash
+   python main.py
+   ```
+
 ## 🆕 What's New: Document AI Integration
 
 **Document AI is now the primary OCR method** for all document types, providing:
@@ -47,8 +68,7 @@ MOHRE/
 │   ├── copy_models_and_dataset.py # Model copying utilities
 │   ├── classifier.py          # Document classifier
 │   ├── document_processor_v5.py # Document processor v5
-│   ├── mobilenet_training.py  # MobileNet training
-│   └── structure_with_gpt.py  # GPT data structuring
+│   └── mobilenet_training.py  # MobileNet training
 ├── 📁 tests/                  # Test files
 │   ├── run_validation_tests.py # Test runner for validation logic
 │   ├── test_validation_logic.py # Validation logic tests
@@ -84,7 +104,6 @@ MOHRE/
 │   ├── VALIDATION_LOGIC_IMPLEMENTATION.md # Validation logic docs
 │   ├── DOCUMENT_AI_INTEGRATION_COMPLETE.md # Document AI setup
 │   ├── GEMINI_VISION_FEATURES.md # Gemini Vision features
-│   ├── GPT_TO_GEMINI_MIGRATION.md # Migration guide
 │   ├── document_ai_setup_complete.md # Setup guide
 │   ├── document_ai_setup_guide.md # Setup guide
 │   ├── ocr_comparison_summary.md # OCR comparison
@@ -190,7 +209,7 @@ MOHRE/
 
 Each processed document generates:
 - **JSON File**: Structured data in JSON format
-- **Text File**: Human-readable GPT response and structured data
+- **Text File**: Human-readable Gemini response and structured data
 - **JPG File**: Compressed processed image
 - **Processing Metadata**: OCR method, confidence scores, extracted fields ⭐ NEW
 

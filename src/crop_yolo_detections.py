@@ -1,11 +1,15 @@
 from ultralytics import YOLO
 import cv2
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 
 # === CONFIGURATION ===
-model_path = r"C:\Users\Husai\Desktop\mohre-email-parser\roboflow_dataset\runs\detect\train\weights\best.pt"
-input_root = r"C:\Users\Husai\Desktop\mohre-email-parser\dataset"
-output_root = r"C:\Users\Husai\Desktop\mohre-email-parser\COMPLETED"
+load_dotenv()
+base_dir = Path(__file__).resolve().parents[1]
+model_path = os.getenv("YOLO_MODEL_PATH", str(base_dir / "models" / "yolo8_best.pt"))
+input_root = os.getenv("INPUT_ROOT", str(base_dir / "data" / "dataset"))
+output_root = os.getenv("OUTPUT_ROOT", str(base_dir / "data" / "processed" / "COMPLETED"))
 
 # Load model
 model = YOLO(model_path)
