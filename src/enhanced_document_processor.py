@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Enhanced Document Processor using trained YOLO8 and ResNet models
+and Google Document AI/Vision for OCR.
 """
 
 import os
@@ -17,6 +18,7 @@ from dotenv import load_dotenv
 
 # Import simple Google Vision orientation detection
 from google_vision_orientation_detector import rotate_if_needed
+from yolo_crop_ocr_pipeline import run_google_vision_ocr
 
 # Load environment variables
 load_dotenv()
@@ -240,69 +242,35 @@ class EnhancedDocumentProcessor:
             return []
     
     def extract_text_with_document_ai(self, image_path):
-        """Extract text from image using Google Document AI or fallback OCR."""
+        """Extract text from image using Google Document AI or Google Vision OCR."""
         try:
             if self.document_ai_client is None:
-                # Use fallback OCR method
-                return self.extract_text_fallback(image_path)
-            
+                # Use Google Vision OCR as fallback
+                return run_google_vision_ocr(image_path)["ocr_text"]
+
             # Read image file
             with open(image_path, "rb") as image:
                 image_content = image.read()
-            
+
             # Configure the process request
             name = f"projects/{os.getenv('GOOGLE_CLOUD_PROJECT_ID')}/locations/us/processors/{os.getenv('DOCUMENT_AI_PROCESSOR_ID')}"
-            
-            # Configure the process request
+
             raw_document = documentai.RawDocument(content=image_content, mime_type="image/jpeg")
             request = documentai.ProcessRequest(name=name, raw_document=raw_document)
-            
+
             # Process the document
             result = self.document_ai_client.process_document(request=request)
             document = result.document
-            
+
             # Extract text
             text = document.text
-            
+
             print(f"📄 Document AI extracted {len(text)} characters")
             return text
-            
+
         except Exception as e:
             print(f"❌ Document AI extraction failed: {e}")
-            return self.extract_text_fallback(image_path)
-    
-    def extract_text_fallback(self, image_path):
-        """Fallback OCR method using pytesseract or other OCR library."""
-        try:
-            print(f"🔍 Starting fallback OCR for: {image_path}")
-            
-            # Try to use pytesseract if available
-            try:
-                import pytesseract
-                from PIL import Image
-                
-                print("✅ pytesseract imported successfully")
-                
-                # Open image
-                image = Image.open(image_path)
-                print(f"✅ Image opened: {image.size}")
-                
-                # Extract text using pytesseract
-                text = pytesseract.image_to_string(image)
-                
-                print(f"📄 Fallback OCR extracted {len(text)} characters")
-                print(f"📄 Text preview: {text[:100]}...")
-                return text
-                
-            except ImportError as e:
-                print(f"⚠️ pytesseract not available: {e}")
-                print("📝 Using basic text extraction")
-                return "Sample text for testing purposes"
-                
-        except Exception as e:
-            print(f"❌ Fallback OCR failed: {e}")
-            print("📝 Returning sample text")
-            return "Sample text for testing purposes"
+            return run_google_vision_ocr(image_path)["ocr_text"]
     
     def extract_salary_details(self, image_path):
         """Extract comprehensive salary details from document image."""
