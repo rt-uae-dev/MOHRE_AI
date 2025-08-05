@@ -9,7 +9,6 @@ ultralytics
 torch
 torchvision
 python-dotenv
-easyocr
 pdf2image
 google-cloud-documentai
 google-cloud-vision
