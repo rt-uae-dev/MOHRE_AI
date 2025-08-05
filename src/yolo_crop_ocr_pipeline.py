@@ -28,9 +28,13 @@ YOLO_MODEL = YOLO(YOLO_MODEL_PATH)
 VISION_CLIENT = vision.ImageAnnotatorClient()
 
 def run_enhanced_ocr(image_path: str) -> dict:
-    """
-    Run OCR using Google Document AI. No other OCR engines are used.
-    Returns comprehensive OCR data with confidence scores.
+    """Run OCR using Document AI with Google Vision fallback.
+
+    Document AI is used as the primary OCR engine. If Document AI is
+    unavailable, encounters an error, or produces low confidence (<0.3),
+    the function falls back to Google Vision OCR. Metadata about which OCR
+    method was used is included in the returned dictionary under the
+    ``ocr_method`` key.
     """
     filename = os.path.basename(image_path)
     print(f"🔍 Processing {filename} with Document AI (primary)...")
@@ -54,6 +58,19 @@ def run_enhanced_ocr(image_path: str) -> dict:
                 print(f"   🎯 Confidence: {confidence:.2f}")
                 print(f"   📝 Extracted Fields: {len(extracted_fields)}")
 
+                if confidence < 0.3:
+                    print(f"   ⚠️ Low confidence ({confidence:.2f}) - switching to Google Vision OCR")
+                    vision_result = run_google_vision_ocr(image_path)
+                    return {
+                        "ocr_text": vision_result.get("ocr_text", ""),
+                        "confidence": confidence,
+                        "document_type": "unknown",
+                        "extracted_fields": {},
+                        "ocr_method": "google_vision",
+                        "text_blocks": [],
+                        "page_count": 1,
+                    }
+
                 return {
                     "ocr_text": full_text,
                     "confidence": confidence,
@@ -68,15 +85,18 @@ def run_enhanced_ocr(image_path: str) -> dict:
         except Exception as e:
             print(f"   ❌ Document AI error: {e}")
 
-    # Document AI unavailable or failed
+    # Fallback to Google Vision OCR when Document AI is unavailable or fails
+    print("   ↪️ Falling back to Google Vision OCR...")
+    vision_result = run_google_vision_ocr(image_path)
+
     return {
-        "ocr_text": "",
+        "ocr_text": vision_result.get("ocr_text", ""),
         "confidence": 0.0,
         "document_type": "unknown",
         "extracted_fields": {},
-        "ocr_method": "document_ai_unavailable",
+        "ocr_method": "google_vision",
         "text_blocks": [],
-        "page_count": 0,
+        "page_count": 1,
     }
 
 def preprocess_image_for_ocr(image_path: str) -> str:
