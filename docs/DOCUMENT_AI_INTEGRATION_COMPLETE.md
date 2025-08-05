@@ -30,11 +30,11 @@
 ### 2. Updated Main Pipeline (`src/main_pipeline.py`)
 - **Enhanced metadata collection**: Stores Document AI extracted fields by document type
 - **Improved logging**: Shows OCR method, confidence scores, and extracted fields
-- **Better field organization**: Separates fields by document type for better GPT processing
+ - **Better field organization**: Separates fields by document type for improved processing
 
-### 3. Enhanced GPT Structuring (`src/structure_with_gpt.py`)
+### 3. Enhanced Structuring (`src/structure_with_gemini.py`)
 - **Document AI field prioritization**: Uses Document AI extracted fields as first priority
-- **Comprehensive field mapping**: Maps all Document AI fields to GPT processing
+- **Comprehensive field mapping**: Maps all Document AI fields for structuring
 - **Improved accuracy**: Better field extraction for passports, certificates, and attestations
 
 ### 4. Document AI Processor (`src/document_ai_processor.py`)
@@ -111,7 +111,7 @@ GOOGLE_APPLICATION_CREDENTIALS=config/GOOGLEAPI.json
 2. **Document AI Processing**: Primary OCR with field extraction
 3. **Confidence Validation**: Low confidence triggers Google Vision fallback
 4. **Field Storage**: Extracted fields stored by document type
-5. **GPT Structuring**: Document AI fields prioritized in final structuring
+5. **Gemini Structuring**: Document AI fields prioritized in final structuring
 
 ## 🎊 Success Metrics
 
@@ -119,7 +119,7 @@ GOOGLE_APPLICATION_CREDENTIALS=config/GOOGLEAPI.json
 - [x] Document AI configured and tested
 - [x] Enhanced OCR pipeline implemented
 - [x] Main pipeline updated
-- [x] GPT structuring enhanced
+- [x] Gemini structuring enhanced
 - [x] All tests passing
 - [x] Ready for production use
 

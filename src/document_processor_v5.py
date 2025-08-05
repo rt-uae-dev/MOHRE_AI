@@ -7,13 +7,17 @@ import torch
 import torchvision.transforms as transforms
 from torchvision import models
 import fitz  # from PyMuPDF
+from pathlib import Path
+from dotenv import load_dotenv
 
 
 # === CONFIG ===
-DATASET_CLASSES_PATH = "C:/Users/Husai/Desktop/mohre-email-parser/dataset"
-INPUT_DIR = "C:/Users/Husai/Desktop/mohre-email-parser/downloads"
-OUTPUT_DIR = "C:/Users/Husai/Desktop/mohre-email-parser/MOHRE_ready"
-MODEL_PATH = "model_classifier.pt"
+load_dotenv()
+BASE_DIR = Path(__file__).resolve().parents[1]
+DATASET_CLASSES_PATH = Path(os.getenv("DATASET_CLASSES_PATH", BASE_DIR / "data" / "dataset"))
+INPUT_DIR = Path(os.getenv("INPUT_DIR", BASE_DIR / "data" / "raw" / "downloads"))
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", BASE_DIR / "data" / "processed" / "MOHRE_ready"))
+MODEL_PATH = Path(os.getenv("MODEL_PATH", BASE_DIR / "models" / "model_classifier.pt"))
 TEMP_JPG = "temp.jpg"
 IMG_SIZE = 224
 MAX_OUTPUT_KB = 110
@@ -27,7 +31,7 @@ CLASS_NAMES = sorted([
 ])
 model = models.resnet18()
 model.fc = torch.nn.Linear(model.fc.in_features, len(CLASS_NAMES))
-model.load_state_dict(torch.load(MODEL_PATH, map_location=torch.device('cpu')))
+model.load_state_dict(torch.load(str(MODEL_PATH), map_location=torch.device('cpu')))
 model.eval()
 
 transform = transforms.Compose([

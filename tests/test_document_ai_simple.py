@@ -87,9 +87,8 @@ def demonstrate_document_ai_concept():
     print(f"\nComparison with Current Approach:")
     print("-" * 40)
     
-    print("Current Google Vision + GPT Approach:")
+    print("Current Google Vision Approach:")
     print("X Requires manual parsing of OCR text")
-    print("X Depends on GPT to understand field relationships")
     print("X May miss fields if OCR quality is poor")
     print("X No confidence scores for individual fields")
     
@@ -110,7 +109,7 @@ def demonstrate_document_ai_concept():
         print(f"+ Document AI found: {issue_place_entity['text']}")
         print(f"+ Confidence: {issue_place_entity['confidence']:.2f}")
         print(f"+ Location: Bounding box at ({issue_place_entity['bounding_box']['x']}, {issue_place_entity['bounding_box']['y']})")
-        print("+ No need for GPT parsing or manual field detection!")
+        print("+ No need for manual field detection!")
     else:
         print("X Issue place not found (but this is unlikely with Document AI)")
     
@@ -118,7 +117,7 @@ def demonstrate_document_ai_concept():
     print(f"\nIntegration Strategy:")
     print("-" * 40)
     print("1. Use Document AI as primary method for passports")
-    print("2. Fall back to Google Vision + GPT if Document AI fails")
+    print("2. Fall back to Google Vision if Document AI fails")
     print("3. Combine results for maximum accuracy")
     print("4. Use Document AI confidence scores to validate data")
     

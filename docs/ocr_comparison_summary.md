@@ -9,7 +9,7 @@ The current pipeline is missing the "Passport Issue Place" field (e.g., "DUBAI")
 - **Text Captured**: ~200+ characters
 - **Issue Place Detection**: ❌ Failed to capture "DUBAI"
 - **Pros**: Good general OCR, already integrated
-- **Cons**: No structured data extraction, requires GPT parsing
+- **Cons**: No structured data extraction, requires additional parsing
 - **Cost**: ~$1.50 per 1,000 images
 
 ### 2. **EasyOCR** (Open Source Alternative)
@@ -99,4 +99,4 @@ With Document AI, the pipeline should reliably extract:
 - ✅ **Passport Issue Place**: "DUBAI"
 - ✅ **All other passport fields** with high confidence
 - ✅ **Better overall accuracy** for identity documents
-- ✅ **Reduced dependency** on GPT for field parsing 
+- ✅ **Reduced dependency** on external parsing for fields

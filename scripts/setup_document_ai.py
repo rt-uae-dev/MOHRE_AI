@@ -112,9 +112,6 @@ IMAP_SERVER=imap.gmail.com
 # Google Cloud Vision API
 GOOGLE_APPLICATION_CREDENTIALS=config/GOOGLEAPI.json
 
-# OpenAI API
-OPENAI_API_KEY=your_openai_api_key
-
 # Google Document AI Configuration
 GOOGLE_CLOUD_PROJECT_ID=your_project_id_here
 DOCUMENT_AI_PROCESSOR_ID=your_processor_id_here

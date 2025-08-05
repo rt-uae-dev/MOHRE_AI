@@ -7,15 +7,18 @@ import torchvision.transforms as transforms
 from torchvision import models
 from PIL import Image
 import google.generativeai as genai
+from pathlib import Path
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # Configure Google Gemini API
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # === CONFIG ===
-DATASET_DIR = "data/dataset"  # Folder that contains your training class subfolders
-MODEL_PATH = "models/classifier.pt"
+BASE_DIR = Path(__file__).resolve().parents[1]
+DATASET_DIR = os.getenv("DATASET_DIR", str(BASE_DIR / "data" / "dataset"))
+MODEL_PATH = os.getenv("MODEL_PATH", str(BASE_DIR / "models" / "classifier.pt"))
 
 # === Auto-detect class names from folders ===
 CLASS_NAMES = sorted([

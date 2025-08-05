@@ -6,8 +6,8 @@ New workflow:
 2. Convert PDF to JPG
 3. Classify through classifier.pt (ResNet)
 4. If certificate exists, ensure certificate_attestation page is classified
-5. Copy attestation_certificate page and compress first
-6. Run YOLO to crop the label out of certificate_attestation page
+5. Compress attestation page once for downstream processing
+6. Run YOLO to crop the label out of certificate_attestation page for OCR
 7. Run OCR for all documents
 """
 
@@ -95,13 +95,14 @@ def main():
             if subject_folder in processed_folders:
                 print(f"⏭️ Skipping already processed folder: {subject_folder}")
                 continue
-                
+
             subject_path = os.path.join(download_dir, subject_folder)
             if not os.path.isdir(subject_path):
                 continue
 
             print(f"\n🔍 Processing folder: {subject_folder}")
-            
+            requested_service = "Unknown Service"
+
             # === STEP 2.1: Read email body.txt ===
             email_text_path = os.path.join(subject_path, "email_body.txt")
             email_text = ""
@@ -115,6 +116,15 @@ def main():
                     service_needed = match.group(1).strip()
                     print(f"🔧 Service needed detected: {service_needed}")
 
+                # Detect requested MOHRE service from email body
+                try:
+                    from service_detector import detect_service_from_email
+                    requested_service = detect_service_from_email(email_text)
+                    print(f"🛠️ Detected service request: {requested_service}")
+                except Exception as e:
+                    requested_service = "Unknown Service"
+                    print(f"⚠️ Service detection failed: {e}")
+            
             # === STEP 2.2: Convert PDFs to JPGs ===
             print("🔄 Converting PDFs to JPGs...")
             all_image_paths = []
@@ -213,27 +223,21 @@ def main():
                 except Exception as e:
                     print(f"⚠️ Error rotating {img_data['filename']}: {e}")
 
-            # === STEP 2.7: If ResNet detects attestation page, compress and copy to finished folder first ===
+            # === STEP 2.7: If ResNet detects attestation page, compress for downstream processing ===
             print("📋 Checking for attestation pages detected by ResNet...")
             attestation_images = [img for img in classified_images if img["label"] in ["certificate_attestation", "attestation_label"]]
-            
+
             for attestation_img in attestation_images:
                 try:
-                    # Compress attestation page first
+                    # Compress the full attestation page once and use the compressed version everywhere
                     compressed_path = compress_image_to_jpg(
                         attestation_img["path"],
                         os.path.join(TEMP_DIR, f"{os.path.splitext(os.path.basename(attestation_img['path']))[0]}_compressed.jpg")
                     )
-                    attestation_img["compressed_path"] = compressed_path
+                    # Store the compressed page for final saving and use it for further processing
+                    attestation_img["full_page_path"] = compressed_path
+                    attestation_img["path"] = compressed_path
                     print(f"✅ Compressed attestation page: {os.path.basename(attestation_img['path'])}")
-                    
-                    # Copy to finished folder immediately
-                    finished_folder = os.path.join(OUTPUT_DIR, subject_folder)
-                    os.makedirs(finished_folder, exist_ok=True)
-                    finished_path = os.path.join(finished_folder, f"{os.path.splitext(os.path.basename(attestation_img['path']))[0]}_attestation_label.jpg")
-                    shutil.copy2(compressed_path, finished_path)
-                    attestation_img["finished_path"] = finished_path
-                    print(f"✅ Copied attestation page to finished folder: {os.path.basename(finished_path)}")
                 except Exception as e:
                     print(f"❌ Error processing attestation {attestation_img['filename']}: {e}")
 
@@ -342,6 +346,12 @@ def main():
                 final_structured = result
                 gemini_response = ""
 
+            # Add detected service to structured output
+            try:
+                final_structured["Requested Service"] = requested_service
+            except Exception:
+                pass
+
             # === STEP 4: Save everything ===
             subject_output_dir = os.path.join(OUTPUT_DIR, subject_folder)
             os.makedirs(subject_output_dir, exist_ok=True)
@@ -383,14 +393,15 @@ def main():
                 f.write(f"COMPLETE DOCUMENT DETAILS FOR: {full_name}\n")
                 f.write("=" * 80 + "\n\n")
                 f.write(f"SERVICE NEEDED: {service_needed}\n\n")
-
                 # Personal Information Section
                 f.write("📋 PERSONAL INFORMATION\n")
                 f.write("-" * 40 + "\n")
                 f.write(f"Full Name: {final_structured.get('Full Name', 'N/A')}\n")
                 f.write(f"Full Name (AR): {final_structured.get('Full Name (AR)', 'N/A')}\n")
                 f.write("Father's Name: " + str(final_structured.get("Father's Name", 'N/A')) + "\n")
+                f.write("Father's Name (AR): " + str(final_structured.get("Father's Name (AR)", 'N/A')) + "\n")
                 f.write("Mother's Name: " + str(final_structured.get("Mother's Name", 'N/A')) + "\n")
+                f.write("Mother's Name (AR): " + str(final_structured.get("Mother's Name (AR)", 'N/A')) + "\n")
                 f.write(f"Date of Birth: {final_structured.get('Date of Birth', 'N/A')}\n")
                 f.write(f"Nationality: {final_structured.get('Nationality', 'N/A')}\n")
                 f.write(f"Nationality (AR): {final_structured.get('Nationality (AR)', 'N/A')}\n")
@@ -461,19 +472,18 @@ def main():
                     base = f"{first_name}_personal_photo"
                 elif doc_type == "certificate":
                     base = f"{first_name}_certificate"
-                elif doc_type == "certificate_attestation":
+                elif doc_type in ["certificate_attestation", "attestation_label"]:
+                    # Always save the full attestation page with a consistent name
                     base = f"{first_name}_certificate_attestation"
-                elif doc_type == "attestation_label":
-                    base = f"{first_name}_attestation_label"
                 elif doc_type == "residence_cancellation":
                     base = f"{first_name}_residence_cancellation"
                 else:
                     base = f"{first_name}_{doc_type}"
                 
                 # Use the appropriate path for saving
-                if img_data["label"] in ["certificate_attestation", "attestation_label"] and "finished_path" in img_data:
-                    # For attestation pages, use the already saved finished path
-                    save_path = img_data["finished_path"]
+                if img_data["label"] in ["certificate_attestation", "attestation_label"] and "full_page_path" in img_data:
+                    # For attestation pages, save the full page (not the cropped label)
+                    save_path = img_data["full_page_path"]
                 elif "cropped_path" in img_data:
                     save_path = img_data["cropped_path"]
                 elif "compressed_path" in img_data:
@@ -502,10 +512,9 @@ def main():
                         base = f"{first_name}_personal_photo"
                     elif doc_type == "certificate":
                         base = f"{first_name}_certificate"
-                    elif doc_type == "certificate_attestation":
+                    elif doc_type in ["certificate_attestation", "attestation_label"]:
+                        # Final saved file for attestation labels should be the full page
                         base = f"{first_name}_certificate_attestation"
-                    elif doc_type == "attestation_label":
-                        base = f"{first_name}_attestation_label"
                     elif doc_type == "residence_cancellation":
                         base = f"{first_name}_residence_cancellation"
                     else:
