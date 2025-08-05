@@ -238,7 +238,8 @@ EMAIL_ADDRESS=your_email@gmail.com
 EMAIL_PASSWORD=your_app_password
 IMAP_SERVER=imap.gmail.com
 
-# Google Gemini API
+# Google API Keys
+GOOGLE_API_KEY=your_google_api_key
 GEMINI_API_KEY=your_gemini_api_key
 ```
 
