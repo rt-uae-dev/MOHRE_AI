@@ -23,7 +23,7 @@
 
 ### 1. Enhanced OCR Pipeline (`src/yolo_crop_ocr_pipeline.py`)
 - **Document AI as primary method** for ALL document types
-- **Smart fallback system**: Only uses Google Vision when Document AI has low confidence (< 0.3) or insufficient text
+- **Smart fallback system**: Uses Google Vision when Document AI fails, is disabled, or has confidence < 0.3
 - **Confidence-based decision making**: Compares results and uses the better one
 - **Comprehensive field extraction**: Extracts structured fields with confidence scores
 
@@ -90,7 +90,7 @@ python main.py  # Now uses Document AI as primary OCR method
 - **Structured Data**: Confidence scores for all extracted fields
 - **Better Field Mapping**: Document AI fields prioritized over raw OCR
 - **Multi-language Support**: Enhanced Arabic/English processing
-- **Fallback System**: Automatic fallback to Google Vision when needed
+- **Fallback System**: Automatic fallback to Google Vision when Document AI fails, is disabled, or returns confidence < 0.3
 
 ## 🔍 Technical Details
 
@@ -109,7 +109,7 @@ GOOGLE_APPLICATION_CREDENTIALS=config/GOOGLEAPI.json
 ### Integration Points
 1. **YOLO Cropping**: Documents are cropped first, then processed
 2. **Document AI Processing**: Primary OCR with field extraction
-3. **Confidence Validation**: Low confidence triggers Google Vision fallback
+3. **Fallback Handling**: Document AI errors, disabled state, or low confidence (< 0.3) trigger Google Vision fallback
 4. **Field Storage**: Extracted fields stored by document type
 5. **Gemini Structuring**: Document AI fields prioritized in final structuring
 
