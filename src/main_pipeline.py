@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 import platform
+import re
 from email_parser import fetch_and_store_emails
 from pdf_converter import convert_pdf_to_jpg
 from resnet18_classifier import classify_image_resnet
@@ -104,10 +105,15 @@ def main():
             # === STEP 2.1: Read email body.txt ===
             email_text_path = os.path.join(subject_path, "email_body.txt")
             email_text = ""
+            service_needed = "N/A"
             if os.path.exists(email_text_path):
                 with open(email_text_path, "r", encoding="utf-8") as f:
                     email_text = f.read()
                 print(f"📧 Email body loaded: {len(email_text)} characters")
+                match = re.search(r"(?i)service needed[:\-]\s*(.+)", email_text)
+                if match:
+                    service_needed = match.group(1).strip()
+                    print(f"🔧 Service needed detected: {service_needed}")
 
             # === STEP 2.2: Convert PDFs to JPGs ===
             print("🔄 Converting PDFs to JPGs...")
@@ -357,7 +363,10 @@ def main():
             else:
                 mother_name = final_structured.get('Mother\'s Name', 'NOT FOUND')
                 print(f"🔍 Debug - final_structured is already dict, mother's name: {mother_name}")
-            
+
+            # Include detected service needed in structured data
+            final_structured["Service Needed"] = service_needed
+
             full_name = final_structured.get("Full Name", "")
             print(f"🔍 Debug - Full Name extracted: '{full_name}'")
             
@@ -368,12 +377,13 @@ def main():
                 print(f"⚠️ No full name found in structured data")
             
             master_text_file = os.path.join(subject_output_dir, f"{first_name}_COMPLETE_DETAILS.txt")
-            
+
             with open(master_text_file, "w", encoding="utf-8") as f:
                 f.write("=" * 80 + "\n")
                 f.write(f"COMPLETE DOCUMENT DETAILS FOR: {full_name}\n")
                 f.write("=" * 80 + "\n\n")
-                
+                f.write(f"SERVICE NEEDED: {service_needed}\n\n")
+
                 # Personal Information Section
                 f.write("📋 PERSONAL INFORMATION\n")
                 f.write("-" * 40 + "\n")
