@@ -12,14 +12,7 @@ The current pipeline is missing the "Passport Issue Place" field (e.g., "DUBAI")
 - **Cons**: No structured data extraction, requires additional parsing
 - **Cost**: ~$1.50 per 1,000 images
 
-### 2. **EasyOCR** (Open Source Alternative)
-- **Text Captured**: 134 characters (page 1), 41 characters (page 2)
-- **Issue Place Detection**: ❌ Failed to capture "DUBAI"
-- **Pros**: Free, offline, multi-language support
-- **Cons**: Lower accuracy, less text captured
-- **Cost**: Free
-
-### 3. **Google Document AI** (Recommended)
+### 2. **Google Document AI** (Recommended)
 - **Text Captured**: Structured data with confidence scores
 - **Issue Place Detection**: ✅ Would extract "DUBAI" with 92% confidence
 - **Pros**: Pre-trained for identity documents, structured extraction, confidence scores
@@ -30,7 +23,7 @@ The current pipeline is missing the "Passport Issue Place" field (e.g., "DUBAI")
 
 ### **Why Issue Place is Missing:**
 1. **Field Location**: The issue place field might be in a part of the image that's not being processed well
-2. **OCR Quality**: Both Google Vision and EasyOCR are missing this specific field
+2. **OCR Quality**: Google Vision is missing this specific field
 3. **Field Format**: The field might be written in a way that's hard for general OCR to read
 
 ### **Document AI Advantages:**
@@ -64,7 +57,6 @@ The current pipeline is missing the "Passport Issue Place" field (e.g., "DUBAI")
 | Method | Cost per 1,000 pages | Setup Time | Accuracy |
 |--------|---------------------|------------|----------|
 | Google Vision | $1.50 | 0 min | Medium |
-| EasyOCR | Free | 5 min | Low |
 | Document AI | $1.50 | 30 min | High |
 
 ## 🔧 Integration Strategy
