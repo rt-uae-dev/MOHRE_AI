@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from config import get_config
 
 # Optional third-party imports; module works with standard library if unavailable
 try:  # pragma: no cover - requests may not be installed in minimal environments
@@ -23,7 +24,8 @@ except ImportError:  # pragma: no cover
     genai = None
 
 # Configure Gemini API if available
-api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+config = get_config()
+api_key = config.google_api_key or config.gemini_api_key
 if api_key and genai:
     genai.configure(api_key=api_key)
 

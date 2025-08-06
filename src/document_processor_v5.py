@@ -7,16 +7,16 @@ import torchvision.transforms as transforms
 from torchvision import models
 import fitz  # from PyMuPDF
 from pathlib import Path
-from dotenv import load_dotenv
+from config import get_config
 
 
 # === CONFIG ===
-load_dotenv()
+config = get_config()
 BASE_DIR = Path(__file__).resolve().parents[1]
-DATASET_CLASSES_PATH = Path(os.getenv("DATASET_CLASSES_PATH", BASE_DIR / "data" / "dataset"))
-INPUT_DIR = Path(os.getenv("INPUT_DIR", BASE_DIR / "data" / "raw" / "downloads"))
-OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", BASE_DIR / "data" / "processed" / "MOHRE_ready"))
-MODEL_PATH = Path(os.getenv("MODEL_PATH", BASE_DIR / "models" / "model_classifier.pt"))
+DATASET_CLASSES_PATH = config.dataset_classes_path
+INPUT_DIR = config.input_dir
+OUTPUT_DIR = config.output_dir
+MODEL_PATH = config.model_path
 TEMP_JPG = "temp.jpg"
 IMG_SIZE = 224
 MAX_OUTPUT_KB = 110

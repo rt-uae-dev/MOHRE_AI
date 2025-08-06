@@ -1,20 +1,28 @@
+"""Utility to compress images to meet size constraints."""
+
 from PIL import Image
 import os
 
+
 def compress_image_to_jpg(image_path: str, output_path: str, max_kb: int = 250) -> str:
-    """
-    Compress an image to JPEG format under a max file size in kilobytes.
-    If needed, reduce dimensions to meet the size constraint.
-    Optimized for document images that need to remain readable.
+    """Compress an image to JPEG format under a size threshold.
+
+    Args:
+        image_path: Path to the source image to compress.
+        output_path: Location where the compressed JPEG will be saved.
+        max_kb: Target maximum size in kilobytes for the compressed file.
+
+    Returns:
+        Path to the compressed JPEG file.
+
+    Raises:
+        FileNotFoundError: If ``image_path`` does not exist.
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     img = Image.open(image_path).convert("RGB")
 
     # Use modern resampling filter
-    try:
-        resample = Image.Resampling.LANCZOS
-    except AttributeError:
-        resample = Image.ANTIALIAS  # For backward compatibility
+    resample = Image.Resampling.LANCZOS
 
     quality = 95
     img.save(output_path, "JPEG", quality=quality)
@@ -39,7 +47,6 @@ def compress_image_to_jpg(image_path: str, output_path: str, max_kb: int = 250) 
     final_kb = os.path.getsize(output_path) / 1024
     if final_kb > max_kb:
         print(f"⚠️ Warning: Could not compress below {max_kb}KB. Final size: {final_kb:.2f}KB")
-        # Don't raise error, just warn and continue
 
     print(f"✅ Compressed {os.path.basename(image_path)} to {final_kb:.1f}KB (quality={quality})")
     return output_path

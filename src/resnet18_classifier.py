@@ -9,78 +9,102 @@ from PIL import Image
 import google.generativeai as genai
 from pathlib import Path
 from dotenv import load_dotenv
-
-load_dotenv()
+from config import get_config
 
 # Configure Google Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+config = get_config()
+genai.configure(api_key=config.gemini_api_key)
 
 # === CONFIG ===
 BASE_DIR = Path(__file__).resolve().parents[1]
-DATASET_DIR = os.getenv("DATASET_DIR", str(BASE_DIR / "data" / "dataset"))
-MODEL_PATH = os.getenv("MODEL_PATH", str(BASE_DIR / "models" / "classifier.pt"))
-
-# === Auto-detect class names from folders ===
-CLASS_NAMES = sorted([
-    d for d in os.listdir(DATASET_DIR)
-    if os.path.isdir(os.path.join(DATASET_DIR, d))
-])
-
-# === Class mapping no longer needed - model has all 23 classes ===
+DATASET_DIR = str(config.dataset_dir)
+MODEL_PATH = str(config.model_path)
 
 # === Device setup ===
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# === Dynamically determine number of classes ===
-if os.path.exists(DATASET_DIR):
-    ORIGINAL_CLASSES = len([d for d in os.listdir(DATASET_DIR) if os.path.isdir(os.path.join(DATASET_DIR, d))])
-    print(f"🔍 Dynamically determined {ORIGINAL_CLASSES} classes from dataset")
-else:
-    ORIGINAL_CLASSES = 23  # Fallback to 23 classes if dataset directory doesn't exist
-    print(f"⚠️ Using fallback: {ORIGINAL_CLASSES} classes")
-
-model = models.resnet18()
-model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
-
-# Try to load the model
+# === Globals initialized lazily ===
+model = None
+transform = None
 model_loaded_successfully = False
-try:
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
-    print(f"✅ Model loaded successfully with {ORIGINAL_CLASSES} classes")
-    model_loaded_successfully = True
-except RuntimeError as e:
-    if "size mismatch" in str(e):
-        print(f"⚠️ Model size mismatch. Expected {ORIGINAL_CLASSES} classes but model has different size.")
+CLASS_NAMES = []
+ORIGINAL_CLASSES = 0
+
+
+def load_resnet_model():
+    """
+    Lazily load the ResNet model and related resources.
+    This should be called before using any classification functions.
+    """
+    global model, transform, model_loaded_successfully, CLASS_NAMES, ORIGINAL_CLASSES
+
+    if model is not None:
+        return model
+
+    load_dotenv()
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+    if os.path.exists(DATASET_DIR):
+        CLASS_NAMES = sorted(
+            d for d in os.listdir(DATASET_DIR)
+            if os.path.isdir(os.path.join(DATASET_DIR, d))
+        )
+        ORIGINAL_CLASSES = len(CLASS_NAMES)
+        print(f"🔍 Dynamically determined {ORIGINAL_CLASSES} classes from dataset")
+    else:
+        CLASS_NAMES = [
+            'ID_Reg', 'Job_offer', 'Submit_work_permit_cancellation', 'certificate',
+            'certificate_attestation', 'contract', 'emirates_id', 'emirates_id_2',
+            'employee_info_form', 'form_signature_page', 'forms', 'ica-issue_residence',
+            'national_ID', 'passport_1', 'passport_2', 'personal_photo', 'preapproval_workpermit',
+            'residence_cancellation', 'salary_documents', 'step1_mohre', 'unknown', 'visa',
+            'work_permit_cancellation'
+        ]
+        ORIGINAL_CLASSES = len(CLASS_NAMES)
+        print(f"⚠️ Using fallback: {ORIGINAL_CLASSES} classes")
+
+    model = models.resnet18()
+    model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
+
+    try:
+        model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
+        print(f"✅ Model loaded successfully with {ORIGINAL_CLASSES} classes")
+        model_loaded_successfully = True
+    except RuntimeError as e:
+        if "size mismatch" in str(e):
+            print(f"⚠️ Model size mismatch. Expected {ORIGINAL_CLASSES} classes but model has different size.")
+            print("🔄 Creating new model with correct size...")
+            model = models.resnet18()
+            model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
+            print(f"✅ Created new model with {ORIGINAL_CLASSES} classes")
+            print("⚠️ WARNING: This is an untrained model and will make random predictions!")
+            print("🔄 Will use Gemini Vision as fallback for classification")
+        else:
+            raise e
+    except FileNotFoundError:
+        print(f"⚠️ Model file not found: {MODEL_PATH}")
         print("🔄 Creating new model with correct size...")
-        # Create a new model with the correct number of classes
         model = models.resnet18()
         model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
         print(f"✅ Created new model with {ORIGINAL_CLASSES} classes")
         print("⚠️ WARNING: This is an untrained model and will make random predictions!")
         print("🔄 Will use Gemini Vision as fallback for classification")
-    else:
-        raise e
-except FileNotFoundError:
-    print(f"⚠️ Model file not found: {MODEL_PATH}")
-    print("🔄 Creating new model with correct size...")
-    model = models.resnet18()
-    model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
-    print(f"✅ Created new model with {ORIGINAL_CLASSES} classes")
-    print("⚠️ WARNING: This is an untrained model and will make random predictions!")
-    print("🔄 Will use Gemini Vision as fallback for classification")
 
-model.to(device)
-model.eval()
+    model.to(device)
+    model.eval()
 
-# === Image transform ===
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-])
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+
+    return model
 
 # === Classify image ===
 def classify_image_resnet(image_path: str) -> str:
+    if model is None or transform is None:
+        raise RuntimeError("Model not loaded. Call load_resnet_model() before classification.")
     # If model wasn't loaded successfully, use Gemini Vision as fallback
     if not model_loaded_successfully:
         print(f"🔄 Using Gemini Vision fallback for {os.path.basename(image_path)} (ResNet model not trained)")
@@ -99,22 +123,7 @@ def classify_image_resnet(image_path: str) -> str:
         probabilities = torch.softmax(outputs, dim=1)
         confidence, predicted = torch.max(probabilities, 1)
         
-        # Dynamically get class names from dataset directory
-        # This ensures we always have the correct class names in alphabetical order
-        if os.path.exists(DATASET_DIR):
-            original_class_names = sorted([d for d in os.listdir(DATASET_DIR) if os.path.isdir(os.path.join(DATASET_DIR, d))])
-        else:
-            # Fallback to hardcoded names if dataset directory doesn't exist
-            original_class_names = [
-                'ID_Reg', 'Job_offer', 'Submit_work_permit_cancellation', 'certificate', 
-                'certificate_attestation', 'contract', 'emirates_id', 'emirates_id_2',
-                'employee_info_form', 'form_signature_page', 'forms', 'ica-issue_residence',
-                'national_ID', 'passport_1', 'passport_2', 'personal_photo', 'preapproval_workpermit',
-                'residence_cancellation', 'salary_documents', 'step1_mohre', 'unknown', 'visa',
-                'work_permit_cancellation'
-            ]
-        
-        predicted_original_class = original_class_names[predicted.item()]
+        predicted_original_class = CLASS_NAMES[predicted.item()]
         confidence_value = confidence.item()
         
         # Only show detailed output if confidence is low
@@ -127,7 +136,7 @@ def classify_image_resnet(image_path: str) -> str:
             top3_conf, top3_indices = torch.topk(probabilities, 3, dim=1)
             print(f"   Top 3 predictions:")
             for i in range(3):
-                class_name = original_class_names[top3_indices[0][i].item()]
+                class_name = CLASS_NAMES[top3_indices[0][i].item()]
                 conf = top3_conf[0][i].item()
                 print(f"     {i+1}. {class_name}: {conf:.3f}")
         
@@ -143,6 +152,8 @@ def classify_image_from_text(ocr_text: str) -> str:
     """
     Classify image based on OCR text using Gemini (text-only, not vision).
     """
+    if not CLASS_NAMES:
+        raise RuntimeError("Model not loaded. Call load_resnet_model() before classification.")
     if not ocr_text.strip():
         print("⚠️ Skipping Gemini — OCR text is empty.")
         return "unknown"
@@ -175,6 +186,8 @@ def classify_image_with_gemini_vision(image_path: str) -> str:
     Classify image using Gemini Vision API (image + text analysis).
     This is especially useful for attestation documents and certificates.
     """
+    if not CLASS_NAMES:
+        raise RuntimeError("Model not loaded. Call load_resnet_model() before classification.")
     try:
         # Load and prepare the image
         image = Image.open(image_path).convert("RGB")
@@ -438,6 +451,10 @@ def extract_attestation_numbers_with_gemini_vision(image_path: str) -> dict:
         }
 
 
+if __name__ == "__main__":
+    load_resnet_model()
+
+
 def extract_document_data_with_gemini_vision(image_path: str) -> dict:
     """
     Extract comprehensive document data using Gemini Vision.
@@ -573,3 +590,7 @@ def extract_document_data_with_gemini_vision(image_path: str) -> dict:
             "extraction_notes": [f"Extraction failed: {e}"],
             "recommendations": ["Check image quality and try again"]
         }
+
+
+if __name__ == "__main__":
+    load_resnet_model()
