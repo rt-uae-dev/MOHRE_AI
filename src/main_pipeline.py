@@ -103,18 +103,35 @@ def main():
             print(f"\n🔍 Processing folder: {subject_folder}")
             requested_service = "Unknown Service"
 
-            # === STEP 2.1: Read email body.txt ===
+            # === STEP 2.1: Read email body.txt and extract sender ===
             email_text_path = os.path.join(subject_path, "email_body.txt")
             email_text = ""
             service_needed = "N/A"
+            sender_email = ""
+            sender_name = ""
             if os.path.exists(email_text_path):
                 with open(email_text_path, "r", encoding="utf-8") as f:
-                    email_text = f.read()
+                    lines = f.readlines()
+                if lines:
+                    first_line = lines[0].strip()
+                    if first_line.lower().startswith("sender:"):
+                        sender_email = first_line.split(":", 1)[1].strip()
+                        body_lines = lines[1:]
+                    else:
+                        body_lines = lines
+                    email_text = "".join(body_lines)
                 print(f"📧 Email body loaded: {len(email_text)} characters")
                 match = re.search(r"(?i)service needed[:\-]\s*(.+)", email_text)
                 if match:
                     service_needed = match.group(1).strip()
                     print(f"🔧 Service needed detected: {service_needed}")
+
+                # Attempt to derive sender name from email
+                if sender_email and re.match(r"^[A-Za-z._]+@[A-Za-z0-9.-]+$", sender_email):
+                    local_part = sender_email.split("@")[0]
+                    name_parts = re.split(r"[._]", local_part)
+                    if name_parts and all(part.isalpha() for part in name_parts):
+                        sender_name = " ".join(part.capitalize() for part in name_parts)
 
                 # Detect requested MOHRE service from email body
                 try:
@@ -385,7 +402,12 @@ def main():
                 f.write("=" * 80 + "\n")
                 f.write(f"COMPLETE DOCUMENT DETAILS FOR: {full_name}\n")
                 f.write("=" * 80 + "\n\n")
-                f.write(f"SERVICE NEEDED: {service_needed}\n\n")
+                f.write(f"SERVICE NEEDED: {service_needed}\n")
+                if sender_name:
+                    f.write(f"Sender Name: {sender_name}\n")
+                if sender_email:
+                    f.write(f"Email Address: {sender_email}\n")
+                f.write("\n")
                 # Personal Information Section
                 f.write("📋 PERSONAL INFORMATION\n")
                 f.write("-" * 40 + "\n")
