@@ -118,12 +118,17 @@ def main():
 
                 # Detect requested MOHRE service from email body
                 try:
-                    from service_detector import detect_service_from_email
-                    requested_service = detect_service_from_email(email_text)
-                    print(f"🛠️ Detected service request: {requested_service}")
-                except Exception as e:
+                    from service_detector import detect_service_from_email, RequestException
+                except ImportError as e:
                     requested_service = "Unknown Service"
-                    print(f"⚠️ Service detection failed: {e}")
+                    print(f"⚠️ Service detection unavailable: {e}")
+                else:
+                    try:
+                        requested_service = detect_service_from_email(email_text)
+                        print(f"🛠️ Detected service request: {requested_service}")
+                    except RequestException as e:
+                        requested_service = "Unknown Service"
+                        print(f"⚠️ Service detection failed: {e}")
             
             # === STEP 2.2: Convert PDFs to JPGs ===
             print("🔄 Converting PDFs to JPGs...")
@@ -137,7 +142,7 @@ def main():
                         all_image_paths.extend(jpg_paths)
                     except PDF_ERRORS as e:
                         print(f"❌ Failed to convert {filename}: {e}")
-                        continue
+                        raise
                 elif filename.lower().endswith((".jpg", ".jpeg", ".png")):
                     # Copy existing images to temp without compression (for best OCR quality)
                     temp_path = os.path.join(TEMP_DIR, filename)
@@ -163,7 +168,7 @@ def main():
                     if parsed_salary:
                         salary_data.update(parsed_salary)
                         print(f"✅ Parsed salary from: {docx_file}")
-                        
+
                         # Display salary breakdown
                         print("💰 Salary Breakdown:")
                         for key, value in parsed_salary.items():
@@ -175,8 +180,9 @@ def main():
                                 print(f"   • {key.replace('_', ' ').title()}: {value}")
                     else:
                         print(f"⚠️ No salary data found in: {docx_file}")
-                except Exception as e:
+                except (OSError, ValueError) as e:
                     print(f"❌ Error parsing salary from {docx_file}: {e}")
+                    raise
 
             # === STEP 2.4: Classify all images with ResNet ===
             print("🏷️ Classifying images with ResNet...")
@@ -190,8 +196,9 @@ def main():
                         "filename": os.path.basename(img_path)
                     })
                     print(f"✅ {os.path.basename(img_path)} → {resnet_label}")
-                except Exception as e:
+                except (OSError, RuntimeError) as e:
                     print(f"❌ Error classifying {os.path.basename(img_path)}: {e}")
+                    raise
 
             # === STEP 2.5: Ensure certificate + attestation pairing ===
             has_certificate = any(img["label"] == "certificate" for img in classified_images)
@@ -224,8 +231,9 @@ def main():
                             print(f"✅ No rotation needed for {img_data['filename']} ({img_data['label']})")
                     else:
                         print(f"⏭️ Skipping rotation check for {img_data['filename']} ({img_data['label']}) - not in rotation check list")
-                except Exception as e:
+                except (OSError, RuntimeError) as e:
                     print(f"⚠️ Error rotating {img_data['filename']}: {e}")
+                    raise
 
             # === STEP 2.7: If ResNet detects attestation page, keep original for downstream processing ===
             print("📋 Checking for attestation pages detected by ResNet...")
@@ -236,8 +244,9 @@ def main():
                     # Use the original, uncompressed page for all downstream processing
                     attestation_img["full_page_path"] = attestation_img["path"]
                     print(f"ℹ️ Using uncompressed attestation page: {os.path.basename(attestation_img['path'])}")
-                except Exception as e:
+                except (OSError, KeyError) as e:
                     print(f"❌ Error processing attestation {attestation_img['filename']}: {e}")
+                    raise
 
             # === STEP 2.8: Run YOLO cropping for all documents ===
             print("✂️ Running YOLO cropping for all documents...")
@@ -254,8 +263,9 @@ def main():
                     else:
                         print(f"⚠️ YOLO could not crop {img_data['filename']} - using full page")
 
-                except Exception as e:
+                except (OSError, RuntimeError) as e:
                     print(f"❌ Error cropping {img_data['filename']}: {e}")
+                    raise
 
             # === STEP 2.9: Run OCR for all documents with attestation fallback ===
             print("📝 Running OCR for all documents...")
@@ -282,8 +292,9 @@ def main():
                     processed_images.append(img_data)
                     print(f"✅ OCR completed: {img_data['filename']} ({img_data['label']})")
 
-                except Exception as e:
+                except (OSError, RuntimeError, ValueError) as e:
                     print(f"❌ Error processing {img_data['filename']}: {e}")
+                    raise
 
             if not processed_images:
                 print(f"⚠️ No processed images for {subject_folder}. Skipping folder.")
@@ -359,7 +370,7 @@ def main():
             # Add detected service to structured output
             try:
                 final_structured["Requested Service"] = requested_service
-            except Exception:
+            except TypeError:
                 pass
 
             # === STEP 4: Save everything ===
@@ -376,10 +387,9 @@ def main():
                     final_structured = json.loads(final_structured)
                     mother_name = final_structured.get('Mother\'s Name', 'NOT FOUND')
                     print(f"🔍 Debug - Successfully parsed JSON, mother's name: {mother_name}")
-                except Exception as e:
+                except json.JSONDecodeError as e:
                     print(f"⚠️ Could not parse final_structured as JSON: {e}")
-                    print(f"⚠️ Raw final_structured: {final_structured[:200]}...")
-                    final_structured = {}
+                    raise
             else:
                 mother_name = final_structured.get('Mother\'s Name', 'NOT FOUND')
                 print(f"🔍 Debug - final_structured is already dict, mother's name: {mother_name}")
@@ -542,8 +552,9 @@ def main():
                         compressed_path = compress_image_to_jpg(saved_file, saved_file)
                         print(f"✅ Final compression: {os.path.basename(saved_file)}")
                     
-                except Exception as e:
+                except (OSError, RuntimeError) as e:
                     print(f"⚠️ Error in final compression for {img_data['filename']}: {e}")
+                    raise
 
             processed_folders.add(subject_folder)
             print(f"📂 Done with folder: {subject_folder}\n{'-'*40}")

@@ -21,27 +21,12 @@ if os.path.join(os.path.dirname(__file__), "src") not in sys.path:
     sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
 from main_pipeline import main as run_full_pipeline
-from pdf_converter import convert_pdf_to_jpg
+from pdf_converter import convert_pdf_to_jpg, PDF_ERRORS
 from yolo_crop_ocr_pipeline import run_yolo_crop, run_enhanced_ocr
 from structure_with_gemini import structure_with_gemini
 
-from pdf2image.exceptions import (
-    PDFInfoNotInstalledError,
-    PDFPageCountError,
-    PDFPopplerTimeoutError,
-    PDFSyntaxError,
-    PopplerNotInstalledError,
-)
-
-PROCESSING_ERRORS = (
-    OSError,
-    RuntimeError,
-    PDFInfoNotInstalledError,
-    PDFPageCountError,
-    PDFPopplerTimeoutError,
-    PDFSyntaxError,
-    PopplerNotInstalledError,
-)
+# Errors that may occur during manual processing
+PROCESSING_ERRORS = PDF_ERRORS + (RuntimeError,)
 
 TEMP_DIR = os.path.join("data", "temp")
 
