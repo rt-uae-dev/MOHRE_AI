@@ -1,12 +1,6 @@
 import os
 import json
 import shutil
-# Add timestamp or UUID
-from datetime import datetime
-import os
-import json
-import shutil
-from datetime import datetime
 
 def save_outputs(jpg_path: str, structured_json: dict, output_dir: str, base_name: str, gemini_response: str = None) -> str:
     """
