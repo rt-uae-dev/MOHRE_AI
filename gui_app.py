@@ -8,6 +8,14 @@ import threading
 import json
 import tkinter as tk
 from tkinter import filedialog, messagebox
+import logging
+
+# Ensure src directory is in path when running standalone
+SRC_DIR = os.path.join(os.path.dirname(__file__), "src")
+if SRC_DIR not in sys.path:
+    sys.path.append(SRC_DIR)
+
+from logger import configure_logging, get_logger
 
 # Optional drag and drop support
 try:
@@ -16,10 +24,6 @@ try:
 except Exception:
     TKDND_AVAILABLE = False
 
-# Ensure src directory is in path when running standalone
-if os.path.join(os.path.dirname(__file__), "src") not in sys.path:
-    sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
-
 from main_pipeline import main as run_full_pipeline
 from pdf_converter import convert_pdf_to_jpg
 from yolo_crop_ocr_pipeline import run_yolo_crop, run_enhanced_ocr
@@ -27,6 +31,8 @@ from structure_with_gemini import structure_with_gemini
 
 TEMP_DIR = os.path.join("data", "temp")
 
+configure_logging()
+logger = get_logger(__name__)
 
 def run_gui():
     """Launch the main GUI window."""
@@ -155,7 +161,7 @@ class ManualProcessingWindow(tk.Toplevel):
                     with open(out_path, "w", encoding="utf-8") as f:
                         json.dump(structured, f, ensure_ascii=False, indent=2)
             except Exception as e:
-                print(f"Error processing {file_path}: {e}")
+                logger.error(f"Error processing {file_path}: {e}")
         self.status_label.config(text="Processing complete")
         messagebox.showinfo("MOHRE", "Manual processing completed")
 

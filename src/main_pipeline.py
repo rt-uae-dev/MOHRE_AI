@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import platform
 import re
+from logger import configure_logging, get_logger
 from email_parser import fetch_and_store_emails
 from pdf_converter import convert_pdf_to_jpg
 from resnet18_classifier import classify_image_resnet
@@ -25,6 +26,8 @@ from output_saving_utils import save_outputs, log_processed_file
 from image_utils import compress_image_to_jpg
 from google_vision_orientation_detector import rotate_if_needed
 from parse_salary_docx import parse_salary_docx
+
+logger = get_logger(__name__)
 
 # === CONFIG ===
 INPUT_DIR = "data/raw/downloads"
@@ -50,14 +53,14 @@ def open_file_explorer(directory_path: str):
             # Linux
             subprocess.run(["xdg-open", directory_path], check=True)
         
-        print(f"📂 Opened file explorer to: {directory_path}")
+        logger.info(f"📂 Opened file explorer to: {directory_path}")
     except Exception as e:
-        print(f"⚠️ Could not open file explorer: {e}")
-        print(f"📂 Please manually navigate to: {os.path.abspath(directory_path)}")
+        logger.warning(f"⚠️ Could not open file explorer: {e}")
+        logger.info(f"📂 Please manually navigate to: {os.path.abspath(directory_path)}")
 
 def main():
     # === STEP 1: Fetch emails ===
-    print("📧 Fetching emails...")
+    logger.info("📧 Fetching emails...")
     fetch_and_store_emails()
 
     # === STEP 2: Process each subject folder ===
@@ -67,23 +70,23 @@ def main():
     
     for download_dir in download_dirs:
         if not os.path.exists(download_dir):
-            print(f"⚠️ Download directory not found: {download_dir}")
+            logger.warning(f"⚠️ Download directory not found: {download_dir}")
             continue
             
-        print(f"📁 Processing from: {download_dir}")
+        logger.info(f"📁 Processing from: {download_dir}")
         folders_to_process = os.listdir(download_dir)
-        print(f"📂 Found {len(folders_to_process)} folders in {download_dir}")
+        logger.info(f"📂 Found {len(folders_to_process)} folders in {download_dir}")
         
         for subject_folder in folders_to_process:
             if subject_folder in processed_folders:
-                print(f"⏭️ Skipping already processed folder: {subject_folder}")
+                logger.info(f"⏭️ Skipping already processed folder: {subject_folder}")
                 continue
 
             subject_path = os.path.join(download_dir, subject_folder)
             if not os.path.isdir(subject_path):
                 continue
 
-            print(f"\n🔍 Processing folder: {subject_folder}")
+            logger.debug(f"\n🔍 Processing folder: {subject_folder}")
             requested_service = "Unknown Service"
 
             # === STEP 2.1: Read email body.txt and extract sender ===
@@ -103,11 +106,11 @@ def main():
                     else:
                         body_lines = lines
                     email_text = "".join(body_lines)
-                print(f"📧 Email body loaded: {len(email_text)} characters")
+                logger.info(f"📧 Email body loaded: {len(email_text)} characters")
                 match = re.search(r"(?i)service needed[:\-]\s*(.+)", email_text)
                 if match:
                     service_needed = match.group(1).strip()
-                    print(f"🔧 Service needed detected: {service_needed}")
+                    logger.info(f"🔧 Service needed detected: {service_needed}")
 
                 # Attempt to derive sender name from email
                 if sender_email and re.match(r"^[A-Za-z._]+@[A-Za-z0-9.-]+$", sender_email):
@@ -120,18 +123,18 @@ def main():
                 try:
                     from service_detector import detect_service_from_email
                     requested_service = detect_service_from_email(email_text)
-                    print(f"🛠️ Detected service request: {requested_service}")
+                    logger.info(f"🛠️ Detected service request: {requested_service}")
                 except Exception as e:
                     requested_service = "Unknown Service"
-                    print(f"⚠️ Service detection failed: {e}")
+                    logger.warning(f"⚠️ Service detection failed: {e}")
             
             # === STEP 2.2: Convert PDFs to JPGs ===
-            print("🔄 Converting PDFs to JPGs...")
+            logger.info("🔄 Converting PDFs to JPGs...")
             all_image_paths = []
             for filename in os.listdir(subject_path):
                 file_path = os.path.join(subject_path, filename)
                 if filename.lower().endswith(".pdf"):
-                    print(f"📄 Converting: {filename}")
+                    logger.info(f"📄 Converting: {filename}")
                     jpg_paths = convert_pdf_to_jpg(file_path, TEMP_DIR)
                     all_image_paths.extend(jpg_paths)
                 elif filename.lower().endswith((".jpg", ".jpeg", ".png")):
@@ -139,14 +142,14 @@ def main():
                     temp_path = os.path.join(TEMP_DIR, filename)
                     shutil.copy2(file_path, temp_path)
                     all_image_paths.append(temp_path)
-                    print(f"📷 Copied image: {filename}")
+                    logger.info(f"📷 Copied image: {filename}")
 
             if not all_image_paths:
-                print(f"⚠️ No images found in {subject_folder}")
+                logger.warning(f"⚠️ No images found in {subject_folder}")
                 continue
 
             # === STEP 2.3: Parse salary DOCX files ===
-            print("💰 Parsing salary DOCX files...")
+            logger.info("💰 Parsing salary DOCX files...")
             salary_data = {}
             
             # Look for salary DOCX files
@@ -158,24 +161,24 @@ def main():
                     parsed_salary = parse_salary_docx(docx_path)
                     if parsed_salary:
                         salary_data.update(parsed_salary)
-                        print(f"✅ Parsed salary from: {docx_file}")
+                        logger.info(f"✅ Parsed salary from: {docx_file}")
                         
                         # Display salary breakdown
-                        print("💰 Salary Breakdown:")
+                        logger.info("💰 Salary Breakdown:")
                         for key, value in parsed_salary.items():
                             if key == "Employment_Terms":
-                                print(f"   📋 Employment Terms:")
+                                logger.info(f"   📋 Employment Terms:")
                                 for term_key, term_value in value.items():
-                                    print(f"      • {term_key.replace('_', ' ').title()}: {term_value}")
+                                    logger.info(f"      • {term_key.replace('_', ' ').title()}: {term_value}")
                             else:
-                                print(f"   • {key.replace('_', ' ').title()}: {value}")
+                                logger.info(f"   • {key.replace('_', ' ').title()}: {value}")
                     else:
-                        print(f"⚠️ No salary data found in: {docx_file}")
+                        logger.warning(f"⚠️ No salary data found in: {docx_file}")
                 except Exception as e:
-                    print(f"❌ Error parsing salary from {docx_file}: {e}")
+                    logger.error(f"❌ Error parsing salary from {docx_file}: {e}")
 
             # === STEP 2.4: Classify all images with ResNet ===
-            print("🏷️ Classifying images with ResNet...")
+            logger.info("🏷️ Classifying images with ResNet...")
             classified_images = []
             for img_path in all_image_paths:
                 try:
@@ -185,24 +188,24 @@ def main():
                         "label": resnet_label,
                         "filename": os.path.basename(img_path)
                     })
-                    print(f"✅ {os.path.basename(img_path)} → {resnet_label}")
+                    logger.info(f"✅ {os.path.basename(img_path)} → {resnet_label}")
                 except Exception as e:
-                    print(f"❌ Error classifying {os.path.basename(img_path)}: {e}")
+                    logger.error(f"❌ Error classifying {os.path.basename(img_path)}: {e}")
 
             # === STEP 2.5: Ensure certificate + attestation pairing ===
             has_certificate = any(img["label"] == "certificate" for img in classified_images)
             has_attestation = any(img["label"] in ["certificate_attestation", "attestation_label"] for img in classified_images)
             
             if has_certificate and not has_attestation:
-                print("⚠️ Certificate found but no attestation page. Looking for misclassified attestation...")
+                logger.warning("⚠️ Certificate found but no attestation page. Looking for misclassified attestation...")
                 for img_data in classified_images:
                     if img_data["label"] in ["emirates_id", "emirates_id_2", "unknown"]:
                         # Reclassify as attestation_label for further processing
                         img_data["label"] = "attestation_label"
-                        print(f"🔄 Reclassified {img_data['filename']} as attestation_label")
+                        logger.info(f"🔄 Reclassified {img_data['filename']} as attestation_label")
 
             # === STEP 2.6: Rotate images if needed using Gemini 2.5 Flash (only specific document types) ===
-            print("🔄 Using Gemini 2.5 Flash to check and rotate images if needed...")
+            logger.info("🔄 Using Gemini 2.5 Flash to check and rotate images if needed...")
             
             # Only check rotation for specific document types after classification
             rotation_check_types = ["passport_1", "passport_2", "personal_photo", "certificate"]
@@ -211,32 +214,32 @@ def main():
                 try:
                     # Only check rotation for specific document types
                     if img_data["label"] in rotation_check_types:
-                        print(f"🔍 Checking rotation for {img_data['filename']} ({img_data['label']})...")
+                        logger.debug(f"🔍 Checking rotation for {img_data['filename']} ({img_data['label']})...")
                         rotated_path = rotate_if_needed(img_data["path"])
                         if rotated_path != img_data["path"]:
                             img_data["path"] = rotated_path
-                            print(f"✅ Gemini 2.5 Flash rotated {img_data['filename']} ({img_data['label']})")
+                            logger.info(f"✅ Gemini 2.5 Flash rotated {img_data['filename']} ({img_data['label']})")
                         else:
-                            print(f"✅ No rotation needed for {img_data['filename']} ({img_data['label']})")
+                            logger.info(f"✅ No rotation needed for {img_data['filename']} ({img_data['label']})")
                     else:
-                        print(f"⏭️ Skipping rotation check for {img_data['filename']} ({img_data['label']}) - not in rotation check list")
+                        logger.info(f"⏭️ Skipping rotation check for {img_data['filename']} ({img_data['label']}) - not in rotation check list")
                 except Exception as e:
-                    print(f"⚠️ Error rotating {img_data['filename']}: {e}")
+                    logger.warning(f"⚠️ Error rotating {img_data['filename']}: {e}")
 
             # === STEP 2.7: If ResNet detects attestation page, keep original for downstream processing ===
-            print("📋 Checking for attestation pages detected by ResNet...")
+            logger.info("📋 Checking for attestation pages detected by ResNet...")
             attestation_images = [img for img in classified_images if img["label"] in ["certificate_attestation", "attestation_label"]]
 
             for attestation_img in attestation_images:
                 try:
                     # Use the original, uncompressed page for all downstream processing
                     attestation_img["full_page_path"] = attestation_img["path"]
-                    print(f"ℹ️ Using uncompressed attestation page: {os.path.basename(attestation_img['path'])}")
+                    logger.info(f"ℹ️ Using uncompressed attestation page: {os.path.basename(attestation_img['path'])}")
                 except Exception as e:
-                    print(f"❌ Error processing attestation {attestation_img['filename']}: {e}")
+                    logger.error(f"❌ Error processing attestation {attestation_img['filename']}: {e}")
 
             # === STEP 2.8: Run YOLO cropping for all documents ===
-            print("✂️ Running YOLO cropping for all documents...")
+            logger.info("✂️ Running YOLO cropping for all documents...")
             for img_data in classified_images:
                 try:
                     # Use the current image path (some may be uncompressed)
@@ -246,15 +249,15 @@ def main():
                     cropped_path = run_yolo_crop(input_path, TEMP_DIR)
                     if cropped_path:
                         img_data["cropped_path"] = cropped_path
-                        print(f"✅ YOLO cropped {img_data['label']}: {os.path.basename(cropped_path)}")
+                        logger.info(f"✅ YOLO cropped {img_data['label']}: {os.path.basename(cropped_path)}")
                     else:
-                        print(f"⚠️ YOLO could not crop {img_data['filename']} - using full page")
+                        logger.warning(f"⚠️ YOLO could not crop {img_data['filename']} - using full page")
 
                 except Exception as e:
-                    print(f"❌ Error cropping {img_data['filename']}: {e}")
+                    logger.error(f"❌ Error cropping {img_data['filename']}: {e}")
 
             # === STEP 2.9: Run OCR for all documents with attestation fallback ===
-            print("📝 Running OCR for all documents...")
+            logger.info("📝 Running OCR for all documents...")
             processed_images = []
 
             for img_data in classified_images:
@@ -264,9 +267,9 @@ def main():
 
                     if img_data["label"] in ["certificate_attestation", "attestation_label"]:
                         if "cropped_path" in img_data:
-                            print(f"🔍 Running OCR on attestation label: {img_data['filename']}")
+                            logger.debug(f"🔍 Running OCR on attestation label: {img_data['filename']}")
                         else:
-                            print(f"⚠️ YOLO failed to crop label for {img_data['filename']} - using full page for OCR")
+                            logger.warning(f"⚠️ YOLO failed to crop label for {img_data['filename']} - using full page for OCR")
 
                     # Run OCR
                     vision_data = run_enhanced_ocr(ocr_path)
@@ -276,19 +279,19 @@ def main():
                     img_data["confidence"] = vision_data.get("confidence", 0.0)
 
                     processed_images.append(img_data)
-                    print(f"✅ OCR completed: {img_data['filename']} ({img_data['label']})")
+                    logger.info(f"✅ OCR completed: {img_data['filename']} ({img_data['label']})")
 
                 except Exception as e:
-                    print(f"❌ Error processing {img_data['filename']}: {e}")
+                    logger.error(f"❌ Error processing {img_data['filename']}: {e}")
 
             if not processed_images:
-                print(f"⚠️ No processed images for {subject_folder}. Skipping folder.")
+                logger.warning(f"⚠️ No processed images for {subject_folder}. Skipping folder.")
                 continue
 
 
 
             # === STEP 3: Comprehensive Gemini structuring ===
-            print(f"🧠 Running comprehensive Gemini structuring for {subject_folder}...")
+            logger.info(f"🧠 Running comprehensive Gemini structuring for {subject_folder}...")
             
             # Collect OCR data by document type
             passport_ocr_1 = ""
@@ -371,26 +374,26 @@ def main():
                     import json
                     final_structured = json.loads(final_structured)
                     mother_name = final_structured.get('Mother\'s Name', 'NOT FOUND')
-                    print(f"🔍 Debug - Successfully parsed JSON, mother's name: {mother_name}")
+                    logger.debug(f"🔍 Debug - Successfully parsed JSON, mother's name: {mother_name}")
                 except Exception as e:
-                    print(f"⚠️ Could not parse final_structured as JSON: {e}")
-                    print(f"⚠️ Raw final_structured: {final_structured[:200]}...")
+                    logger.warning(f"⚠️ Could not parse final_structured as JSON: {e}")
+                    logger.warning(f"⚠️ Raw final_structured: {final_structured[:200]}...")
                     final_structured = {}
             else:
                 mother_name = final_structured.get('Mother\'s Name', 'NOT FOUND')
-                print(f"🔍 Debug - final_structured is already dict, mother's name: {mother_name}")
+                logger.debug(f"🔍 Debug - final_structured is already dict, mother's name: {mother_name}")
 
             # Include detected service needed in structured data
             final_structured["Service Needed"] = service_needed
 
             full_name = final_structured.get("Full Name", "")
-            print(f"🔍 Debug - Full Name extracted: '{full_name}'")
+            logger.debug(f"🔍 Debug - Full Name extracted: '{full_name}'")
             
             if full_name:
                 first_name = full_name.split()[0] if full_name else "Unknown"
-                print(f"🔍 Debug - First Name extracted: '{first_name}'")
+                logger.debug(f"🔍 Debug - First Name extracted: '{first_name}'")
             else:
-                print(f"⚠️ No full name found in structured data")
+                logger.warning(f"⚠️ No full name found in structured data")
             
             master_text_file = os.path.join(subject_output_dir, f"{first_name}_COMPLETE_DETAILS.txt")
 
@@ -463,7 +466,7 @@ def main():
                 f.write(f"Attestation Number 1: {final_structured.get('Attestation Number 1', 'N/A')}\n")
                 f.write(f"Attestation Number 2: {final_structured.get('Attestation Number 2', 'N/A')}\n\n")
                 
-            print(f"📄 Created comprehensive details file: {master_text_file}")
+            logger.info(f"📄 Created comprehensive details file: {master_text_file}")
 
             # Save individual files
             for img_data in processed_images:
@@ -506,7 +509,7 @@ def main():
                 log_processed_file(LOG_FILE, img_data["filename"], final_path, img_data["label"])
 
             # === STEP 5: Final compression of all saved files ===
-            print("🗜️ Compressing all saved files to under 110KB...")
+            logger.info("🗜️ Compressing all saved files to under 110KB...")
             for img_data in processed_images:
                 try:
                     # Find the saved file path
@@ -536,20 +539,21 @@ def main():
                     if os.path.exists(saved_file):
                         # Compress the saved file
                         compressed_path = compress_image_to_jpg(saved_file, saved_file)
-                        print(f"✅ Final compression: {os.path.basename(saved_file)}")
+                        logger.info(f"✅ Final compression: {os.path.basename(saved_file)}")
                     
                 except Exception as e:
-                    print(f"⚠️ Error in final compression for {img_data['filename']}: {e}")
+                    logger.warning(f"⚠️ Error in final compression for {img_data['filename']}: {e}")
 
             processed_folders.add(subject_folder)
-            print(f"📂 Done with folder: {subject_folder}\n{'-'*40}")
+            logger.info(f"📂 Done with folder: {subject_folder}\n{'-'*40}")
 
-    print("✅ All documents processed.")
+    logger.info("✅ All documents processed.")
     
     # Open file explorer to the COMPLETED directory
-    print(f"\n📂 Opening file explorer to view processed documents...")
+    logger.info(f"\n📂 Opening file explorer to view processed documents...")
     absolute_output_dir = os.path.abspath(OUTPUT_DIR)
     open_file_explorer(absolute_output_dir)
 
 if __name__ == "__main__":
+    configure_logging()
     main()
