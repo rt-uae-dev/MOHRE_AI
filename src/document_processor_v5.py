@@ -77,6 +77,16 @@ def process_folder(input_dir, output_dir):
         if not os.path.isdir(folder_path):
             continue
 
+        # Determine the corresponding output folder
+        output_folder = os.path.join(output_dir, folder)
+
+        # Skip processing if this folder has already been handled
+        if os.path.exists(output_folder):
+            print(f"⏭️ Skipping already processed folder: {folder}")
+            continue
+
+        os.makedirs(output_folder, exist_ok=True)
+
         for file in os.listdir(folder_path):
             if not file.lower().endswith(".pdf"):
                 continue
@@ -105,7 +115,7 @@ def process_folder(input_dir, output_dir):
 
                     # Step 5: Compress and save
                     final_name = f"{os.path.splitext(file)[0]}_page{i+1}__{predicted_class}.jpg"
-                    final_path = os.path.join(output_dir, final_name)
+                    final_path = os.path.join(output_folder, final_name)
                     compress_image(image, final_path)
                     print(f"✅ Saved: {final_path}")
 
