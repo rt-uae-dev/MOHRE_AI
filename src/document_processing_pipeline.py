@@ -3,11 +3,12 @@ from PIL import Image
 from yolo_crop_ocr_pipeline import run_yolo_crop, run_enhanced_ocr
 from image_rotation_utils import rotate_image_if_needed
 from resnet18_classifier import (
-    classify_image_resnet, 
-    classify_image_from_text, 
+    classify_image_resnet,
+    classify_image_from_text,
     classify_image_with_gemini_vision,
     check_image_orientation,
-    auto_rotate_image_if_needed
+    auto_rotate_image_if_needed,
+    load_resnet_model
 )
 
 def validate_passport_in_certificate(ocr_text: str) -> bool:
@@ -261,6 +262,7 @@ def classify_and_ocr(image_path: str, temp_dir: str):
         - vision_data: {ocr_text, angle, labels, document_type, extracted_fields, confidence}
         - final label (resnet or Gemini fallback)
     """
+    load_resnet_model()
     print(f"\n🔁 Processing: {os.path.basename(image_path)}")
 
     # Step 1: Crop the image

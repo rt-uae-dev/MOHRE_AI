@@ -10,13 +10,15 @@ from pathlib import Path
 # Add src to path
 sys.path.append('src')
 
-from resnet18_classifier import classify_image_resnet
+from resnet18_classifier import classify_image_resnet, load_resnet_model
 
 def test_classifier():
     """Test the ResNet classifier with sample images from dataset"""
-    
+
     print("🧪 Testing ResNet Classifier Only")
     print("=" * 50)
+
+    load_resnet_model()
     
     # Test with sample images from the dataset directory
     dataset_dir = "data/dataset"
@@ -80,4 +82,4 @@ def test_classifier():
     print("3. Or use: explorer data/dataset")
 
 if __name__ == "__main__":
-    test_classifier() 
+    test_classifier()
