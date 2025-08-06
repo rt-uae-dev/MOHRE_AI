@@ -18,10 +18,13 @@ A comprehensive document processing system for MOHRE (Ministry of Human Resource
    cp .env.example .env
    # edit .env with your API keys and project IDs
    ```
-4. Run the pipeline
+4. Launch the GUI
    ```bash
    python main.py
    ```
+   This opens a window where you can either run the full automated pipeline
+   over the downloads folder or manually select specific files for cropping
+   and OCR structuring.
 
 ## 🆕 What's New: Document AI Integration
 

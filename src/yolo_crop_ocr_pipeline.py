@@ -2,12 +2,9 @@ import os
 import io
 import cv2
 import numpy as np
-from dotenv import load_dotenv
 from ultralytics import YOLO
 from google.cloud import vision
-
-# Load environment variables first
-load_dotenv()
+from config import get_config
 
 # Import Document AI processor
 try:
@@ -18,12 +15,9 @@ except ImportError as e:
     DOCUMENT_AI_AVAILABLE = False
     print(f"⚠️ Document AI not available: {e}")
 
-# === LOAD .env VARIABLES ===
-load_dotenv()
-
 # === CONFIG ===
-YOLO_MODEL_PATH = "models/yolo8_best.pt"
-YOLO_MODEL = YOLO(YOLO_MODEL_PATH)
+config = get_config()
+YOLO_MODEL = YOLO(str(config.yolo_model_path))
 
 VISION_CLIENT = vision.ImageAnnotatorClient()
 

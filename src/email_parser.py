@@ -4,16 +4,17 @@ import os
 import time
 import shutil
 from email.header import decode_header
-from dotenv import load_dotenv
+from email.utils import parseaddr
 from datetime import datetime
+from config import get_config
 
 # Load environment variables
-load_dotenv()
+config = get_config()
 
-EMAIL = os.getenv("EMAIL_ADDRESS")
-PASSWORD = os.getenv("EMAIL_PASSWORD")
-IMAP_SERVER = os.getenv("IMAP_SERVER")
-DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "data/raw/downloads")
+EMAIL = config.email_address
+PASSWORD = config.email_password
+IMAP_SERVER = config.imap_server
+DOWNLOAD_DIR = str(config.download_dir)
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
@@ -46,10 +47,16 @@ def save_email_body(msg, subject_folder):
     else:
         body = msg.get_payload(decode=True).decode(errors="ignore")
 
+    # Extract sender's email address
+    from_field = msg.get("From", "")
+    sender_email = parseaddr(from_field)[1]
+
     folder_path = os.path.join(DOWNLOAD_DIR, subject_folder)
     os.makedirs(folder_path, exist_ok=True)
     body_path = os.path.join(folder_path, "email_body.txt")
     with open(body_path, "w", encoding="utf-8") as f:
+        if sender_email:
+            f.write(f"Sender: {sender_email}\n")
         f.write(body)
     print(f"📝 Saved email body: {body_path}")
     return body_path

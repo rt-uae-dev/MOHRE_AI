@@ -8,13 +8,13 @@ import torch.nn as nn
 import torch.optim as optim
 from datetime import datetime
 from pathlib import Path
-from dotenv import load_dotenv
+from config import get_config
 
 # Config
-load_dotenv()
+config = get_config()
 BASE_DIR = Path(__file__).resolve().parents[1]
-DATA_DIR = os.getenv("DATA_DIR", str(BASE_DIR / "data" / "dataset"))
-MODEL_SAVE_PATH = os.getenv("MODEL_SAVE_PATH", "model_classifier.pt")
+DATA_DIR = str(config.data_dir)
+MODEL_SAVE_PATH = str(config.model_save_path)
 BATCH_SIZE = 8
 EPOCHS = 15
 LEARNING_RATE = 0.001

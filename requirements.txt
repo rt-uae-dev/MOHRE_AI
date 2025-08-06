@@ -13,7 +13,9 @@ ultralytics
 
 # Tooling
 pdf2image
+pymupdf
 python-docx
 python-dotenv
 pytest
+tkinterdnd2
 

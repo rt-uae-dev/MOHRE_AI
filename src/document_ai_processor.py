@@ -7,18 +7,17 @@ Handles structured document processing using Document OCR Processor
 import os
 import json
 from typing import Dict, List, Optional, Tuple
-from dotenv import load_dotenv
-
-load_dotenv()
+from config import get_config
 
 class DocumentAIProcessor:
     """Google Document AI processor using Document OCR Processor"""
     
     def __init__(self):
         """Initialize Document AI client and processor"""
-        # Get processor details from environment
-        self.project_id = os.getenv('GOOGLE_CLOUD_PROJECT_ID')
-        self.processor_id = os.getenv('DOCUMENT_AI_PROCESSOR_ID')
+        # Get processor details from configuration
+        config = get_config()
+        self.project_id = config.google_cloud_project_id
+        self.processor_id = config.document_ai_processor_id
         self.location = "us"  # Default location
         
         if not self.project_id or not self.processor_id:

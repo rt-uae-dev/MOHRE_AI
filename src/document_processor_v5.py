@@ -7,16 +7,16 @@ import torchvision.transforms as transforms
 from torchvision import models
 import fitz  # from PyMuPDF
 from pathlib import Path
-from dotenv import load_dotenv
+from config import get_config
 
 
 # === CONFIG ===
-load_dotenv()
+config = get_config()
 BASE_DIR = Path(__file__).resolve().parents[1]
-DATASET_CLASSES_PATH = Path(os.getenv("DATASET_CLASSES_PATH", BASE_DIR / "data" / "dataset"))
-INPUT_DIR = Path(os.getenv("INPUT_DIR", BASE_DIR / "data" / "raw" / "downloads"))
-OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", BASE_DIR / "data" / "processed" / "MOHRE_ready"))
-MODEL_PATH = Path(os.getenv("MODEL_PATH", BASE_DIR / "models" / "model_classifier.pt"))
+DATASET_CLASSES_PATH = config.dataset_classes_path
+INPUT_DIR = config.input_dir
+OUTPUT_DIR = config.output_dir
+MODEL_PATH = config.model_path
 TEMP_JPG = "temp.jpg"
 IMG_SIZE = 224
 MAX_OUTPUT_KB = 110
@@ -77,6 +77,16 @@ def process_folder(input_dir, output_dir):
         if not os.path.isdir(folder_path):
             continue
 
+        # Determine the corresponding output folder
+        output_folder = os.path.join(output_dir, folder)
+
+        # Skip processing if this folder has already been handled
+        if os.path.exists(output_folder):
+            print(f"⏭️ Skipping already processed folder: {folder}")
+            continue
+
+        os.makedirs(output_folder, exist_ok=True)
+
         for file in os.listdir(folder_path):
             if not file.lower().endswith(".pdf"):
                 continue
@@ -105,7 +115,7 @@ def process_folder(input_dir, output_dir):
 
                     # Step 5: Compress and save
                     final_name = f"{os.path.splitext(file)[0]}_page{i+1}__{predicted_class}.jpg"
-                    final_path = os.path.join(output_dir, final_name)
+                    final_path = os.path.join(output_folder, final_name)
                     compress_image(image, final_path)
                     print(f"✅ Saved: {final_path}")
 
