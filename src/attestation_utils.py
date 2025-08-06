@@ -4,21 +4,22 @@ Attestation number validation utilities
 """
 
 import re
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 
-def validate_attestation_numbers(ocr_text: str, extracted_numbers: dict) -> dict:
-    """
-    Validate that extracted attestation numbers actually appear in the OCR text
-    
+
+def validate_attestation_numbers(ocr_text: str, extracted_numbers: Dict[str, Optional[str]]) -> Dict[str, Optional[str]]:
+    """Validate extracted attestation numbers against OCR text.
+
     Args:
-        ocr_text: The OCR text from the attestation document
-        extracted_numbers: Dictionary containing 'Attestation Number 1' and 'Attestation Number 2'
-    
+        ocr_text: OCR text extracted from the attestation document.
+        extracted_numbers: Dictionary containing potential attestation numbers.
+
     Returns:
-        Dictionary with validated numbers (None if not found in OCR text)
+        Mapping of attestation number keys to validated numbers or ``None`` if
+        the value could not be confirmed.
     """
-    
-    validated = {}
+
+    validated: Dict[str, Optional[str]] = {}
     
     # Arabic to Western numeral mapping
     arabic_to_western = {
@@ -32,14 +33,26 @@ def validate_attestation_numbers(ocr_text: str, extracted_numbers: dict) -> dict
         normalized_ocr = normalized_ocr.replace(arabic, western)
     
     # Helper function to clean and validate attestation numbers
-    def clean_attestation_number(number_str: str, min_length: int, max_length: int, number_type: str) -> str:
-        """Clean attestation number by removing leading zeros and validating format"""
+    def clean_attestation_number(
+        number_str: Optional[str], min_length: int, max_length: int, number_type: str
+    ) -> Optional[str]:
+        """Clean an attestation number and ensure it meets basic criteria.
+
+        Args:
+            number_str: The raw number extracted from OCR.
+            min_length: Minimum allowed length for the number.
+            max_length: Maximum allowed length for the number.
+            number_type: Descriptive name for logging.
+
+        Returns:
+            The cleaned number if valid; otherwise ``None``.
+        """
         if not number_str or number_str == 'null':
             return None
         
         # Remove leading zeros
-        cleaned = number_str.lstrip('0')
-        
+        cleaned: str = number_str.lstrip('0')
+
         # Check if it's a valid format
         if not cleaned.isdigit():
             print(f"❌ {number_type} '{number_str}' is not a valid number - setting to null")
@@ -58,8 +71,8 @@ def validate_attestation_numbers(ocr_text: str, extracted_numbers: dict) -> dict
     # Check Attestation Number 1 (should be 10-15 digits, no leading zeros)
     if 'Attestation Number 1' in extracted_numbers:
         num1 = extracted_numbers['Attestation Number 1']
-        cleaned_num1 = clean_attestation_number(num1, 5, 15, "Attestation Number 1")  # 5-15 digits (more flexible)
-        
+        cleaned_num1: Optional[str] = clean_attestation_number(num1, 5, 15, "Attestation Number 1")  # 5-15 digits (more flexible)
+
         if cleaned_num1:
             # Check if the cleaned number appears in the normalized OCR text
             if cleaned_num1 in normalized_ocr:
@@ -78,8 +91,8 @@ def validate_attestation_numbers(ocr_text: str, extracted_numbers: dict) -> dict
     # Check Attestation Number 2 (should be 6-7 digits, no leading zeros)
     if 'Attestation Number 2' in extracted_numbers:
         num2 = extracted_numbers['Attestation Number 2']
-        cleaned_num2 = clean_attestation_number(num2, 6, 7, "Attestation Number 2")  # 6-7 digits
-        
+        cleaned_num2: Optional[str] = clean_attestation_number(num2, 6, 7, "Attestation Number 2")  # 6-7 digits
+
         if cleaned_num2:
             # Check if the cleaned number appears in the normalized OCR text
             if cleaned_num2 in normalized_ocr:
@@ -102,15 +115,20 @@ def validate_attestation_numbers(ocr_text: str, extracted_numbers: dict) -> dict
     return validated
 
 def extract_attestation_numbers_from_ocr(ocr_text: str) -> Tuple[List[str], List[str]]:
-    """
-    Extract potential attestation numbers from OCR text
-    
+    """Extract potential attestation numbers from OCR text.
+
     Args:
-        ocr_text: The OCR text from the attestation document
-    
+        ocr_text: The OCR text from the attestation document.
+
     Returns:
-        Tuple of (long_numbers, seven_digit_numbers)
+        A tuple containing long-form numbers and seven-digit numbers.
+
+    Raises:
+        ValueError: If ``ocr_text`` is empty.
     """
+
+    if not ocr_text:
+        raise ValueError("OCR text is required for number extraction")
     
     # Look for attestation numbers that are 10-15 digits long
     long_numbers = re.findall(r'\b\d{10,15}\b', ocr_text)
@@ -124,30 +142,30 @@ def extract_attestation_numbers_from_ocr(ocr_text: str) -> Tuple[List[str], List
     
     return filtered_long, filtered_seven
 
-def suggest_attestation_numbers(ocr_text: str) -> dict:
-    """
-    Suggest attestation numbers based on OCR text analysis
-    
+def suggest_attestation_numbers(ocr_text: str) -> Dict[str, Optional[str] | List[str]]:
+    """Suggest attestation numbers based on OCR text analysis.
+
     Args:
-        ocr_text: The OCR text from the attestation document
-    
+        ocr_text: The OCR text from the attestation document.
+
     Returns:
-        Dictionary with suggested numbers
+        Dictionary containing suggested numbers and lists of available
+        alternatives.
     """
-    
+
     long_nums, seven_nums = extract_attestation_numbers_from_ocr(ocr_text)
-    
-    suggestions = {
+
+    suggestions: Dict[str, Optional[str] | List[str]] = {
         'Attestation Number 1': None,
         'Attestation Number 2': None,
         'available_long_numbers': long_nums,
-        'available_seven_digit_numbers': seven_nums
+        'available_seven_digit_numbers': seven_nums,
     }
-    
+
     if long_nums:
         suggestions['Attestation Number 1'] = long_nums[0]  # Take the first one
-    
+
     if seven_nums:
         suggestions['Attestation Number 2'] = seven_nums[0]  # Take the first one
-    
+
     return suggestions

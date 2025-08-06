@@ -1,9 +1,21 @@
 from docx import Document
 import re
+from typing import Dict, Any
 
-def parse_salary_docx(docx_path: str) -> dict:
-    """
-    Parse salary details and employment terms from DOCX file.
+
+def parse_salary_docx(docx_path: str) -> Dict[str, Any]:
+    """Parse salary details and employment terms from a DOCX file.
+
+    Args:
+        docx_path: Path to the DOCX document to parse.
+
+    Returns:
+        A dictionary containing extracted salary components and employment
+        terms. The structure of the dictionary mirrors the fields detected in
+        the document.
+
+    Raises:
+        FileNotFoundError: If ``docx_path`` does not point to a valid file.
     """
     try:
         doc = Document(docx_path)
@@ -103,7 +115,7 @@ def parse_salary_docx(docx_path: str) -> dict:
             else:
                 salary_data["Other_Allowance"] = value
         else:
-            total_amount = 0
+            total_amount: float = 0.0
             allowance_names = []
             
             for key, value in combinable_allowances:
