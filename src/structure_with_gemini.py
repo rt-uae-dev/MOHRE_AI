@@ -196,6 +196,7 @@ Follow these rules:
 18. **Salary Information**:
     - CRITICAL: If salary_data is provided and contains salary information, use ONLY the salary_data values
     - DO NOT extract salary from OCR text or other sources if salary_data is available
+    - DO NOT extract salary information from employment info form OCR text
     - FIRST PRIORITY: If salary_data has "Total", use that value (e.g., "19170 AED")
     - SECOND PRIORITY: If salary_data has "Total Salary", use that value (e.g., "AED 96,000")
     - THIRD PRIORITY: If salary_data has "Basic", use that value (e.g., "5453 AED")
@@ -205,6 +206,7 @@ Follow these rules:
     - DO NOT return the entire salary_data dictionary - extract the main salary value only
     - IMPORTANT: Always include "AED" in the salary value if it's not already present
     - CRITICAL: Ignore any salary-like numbers found in OCR text if salary_data is provided
+    - CRITICAL: Do NOT extract salary from employment info form - only use salary_data from DOCX files
     - ENHANCED: Include detailed salary breakdown and employment terms if available:
       * Basic Salary
       * Housing Allowance
@@ -241,7 +243,9 @@ Follow these rules:
       * Look for attestation dates and authorities
     - **Employee Information Forms**:
       * Look for all personal details (name, DOB, nationality, etc.)
-      * Look for employment details (job title, salary, etc.)
+      * Look for employment details (job title, etc.)
+      * DO NOT extract salary information from employment info forms
+      * Salary information should only come from dedicated salary DOCX files
 
 21. **Arabic Translations**: 
     - Translate Full Name, Father's Name, Mother's Name, Place of Birth, and Passport Issue Place to Arabic

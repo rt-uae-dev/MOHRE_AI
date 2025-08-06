@@ -31,7 +31,7 @@ class Config:
     dataset_classes_path: Path = Path(os.getenv("DATASET_CLASSES_PATH", BASE_DIR / "data" / "dataset"))
     input_dir: Path = Path(os.getenv("INPUT_DIR", BASE_DIR / "data" / "raw" / "downloads"))
     output_dir: Path = Path(os.getenv("OUTPUT_DIR", BASE_DIR / "data" / "processed" / "MOHRE_ready"))
-    model_path: Path = Path(os.getenv("MODEL_PATH", BASE_DIR / "models" / "model_classifier.pt"))
+    model_path: Path = Path(os.getenv("MODEL_PATH", BASE_DIR / "models" / "classifier.pt"))
     root_dir: Path = Path(os.getenv("ROOT_DIR", BASE_DIR / "data" / "raw" / "downloads"))
     dataset_dir: Path = Path(os.getenv("DATASET_DIR", BASE_DIR / "data" / "dataset"))
     source_yolo_model: Path = Path(os.getenv("SOURCE_YOLO_MODEL", BASE_DIR / "models" / "yolo8_best.pt"))
