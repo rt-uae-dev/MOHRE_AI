@@ -18,21 +18,10 @@ import platform
 import re
 import tempfile
 from logger import configure_logging, get_logger
-from mohre_ai.email_parser import fetch_and_store_emails
-from mohre_ai.pdf_converter import convert_pdf_to_jpg
-from mohre_ai.resnet18_classifier import classify_image_resnet
-from mohre_ai.yolo_crop_ocr_pipeline import run_yolo_crop, run_enhanced_ocr
-from mohre_ai.structure_with_gemini import structure_with_gemini
-from mohre_ai.output_saving_utils import save_outputs, log_processed_file
-from mohre_ai.image_utils import compress_image_to_jpg
-from mohre_ai.google_vision_orientation_detector import rotate_if_needed
-from mohre_ai.parse_salary_docx import parse_salary_docx
 from dataclasses import dataclass
 from typing import List, Dict, Tuple
 from email_parser import fetch_and_store_emails
 from pdf_converter import convert_pdf_to_jpg, PDF_ERRORS
-from resnet18_classifier import classify_image_resnet
-from pdf_converter import convert_pdf_to_jpg
 from resnet18_classifier import classify_image_resnet, load_resnet_model
 from yolo_crop_ocr_pipeline import run_yolo_crop, run_enhanced_ocr
 from structure_with_gemini import structure_with_gemini
@@ -68,21 +57,13 @@ def open_file_explorer(directory_path: str) -> None:
             subprocess.run(["xdg-open", directory_path], check=True)
         
         logger.info(f"📂 Opened file explorer to: {directory_path}")
-    except Exception as e:
-        logger.warning(f"⚠️ Could not open file explorer: {e}")
-        logger.info(f"📂 Please manually navigate to: {os.path.abspath(directory_path)}")
-
-
         print(f"📂 Opened file explorer to: {directory_path}")
     except (FileNotFoundError, subprocess.CalledProcessError, OSError) as e:
+        logger.warning(f"⚠️ Could not open file explorer: {e}")
+        logger.info(f"📂 Please manually navigate to: {os.path.abspath(directory_path)}")
         print(f"⚠️ Could not open file explorer: {e}")
-        raise
+        print(f"📂 Please manually navigate to: {os.path.abspath(directory_path)}")
 
-
-def main():
-    load_resnet_model()
-    # === STEP 1: Fetch emails ===
-    logger.info("📧 Fetching emails...")
 
 def fetch_emails(context: PipelineContext) -> None:
     print("📧 Fetching emails...")
@@ -108,6 +89,14 @@ def convert_documents(context: PipelineContext, subject_path: str) -> List[str]:
 
 def classify_images(context: PipelineContext, image_paths: List[str]) -> List[Dict]:
     print("🏷️ Classifying images with ResNet...")
+    # Ensure model is loaded before classification
+    try:
+        load_resnet_model()
+        print("✅ ResNet model loaded for classification")
+    except Exception as e:
+        print(f"❌ Failed to load ResNet model: {e}")
+        return []
+    
     classified_images: List[Dict] = []
     for img_path in image_paths:
         try:
@@ -269,6 +258,14 @@ def save_results(context: PipelineContext, subject_folder: str, processed_images
 
 
 def main() -> None:
+    # Load ResNet model at the start
+    try:
+        load_resnet_model()
+        logger.info("✅ ResNet model loaded successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to load ResNet model: {e}")
+        return
+    
     context = PipelineContext()
     fetch_emails(context)
 
@@ -379,11 +376,12 @@ def main() -> None:
             # Look for salary DOCX files
             docx_files = [f for f in os.listdir(subject_path) if f.lower().endswith('.docx') and 'salary' in f.lower()]
             
-
-                    from service_detector import detect_service_from_email
-                    requested_service = detect_service_from_email(email_text)
-                except Exception:
-                    requested_service = "Unknown Service"
+            # Detect service from email
+            try:
+                from service_detector import detect_service_from_email
+                requested_service = detect_service_from_email(email_text)
+            except Exception:
+                requested_service = "Unknown Service"
 
             image_paths = convert_documents(context, subject_path)
             if not image_paths:
@@ -399,10 +397,6 @@ def main() -> None:
                     if parsed_salary:
                         salary_data.update(parsed_salary)
                         logger.info(f"✅ Parsed salary from: {docx_file}")
-                        
-
-
-                        print(f"✅ Parsed salary from: {docx_file}")
 
                         # Display salary breakdown
                         logger.info("💰 Salary Breakdown:")
@@ -418,14 +412,6 @@ def main() -> None:
                 except Exception as e:
                     logger.error(f"❌ Error parsing salary from {docx_file}: {e}")
 
-                        print(f"⚠️ No salary data found in: {docx_file}")
-                except (OSError, ValueError) as e:
-
-                except Exception as e:
-
-                    print(f"❌ Error parsing salary from {docx_file}: {e}")
-                    raise
-
             # === STEP 2.4: Classify all images with ResNet ===
             logger.info("🏷️ Classifying images with ResNet...")
             classified_images = []
@@ -440,11 +426,6 @@ def main() -> None:
                     logger.info(f"✅ {os.path.basename(img_path)} → {resnet_label}")
                 except Exception as e:
                     logger.error(f"❌ Error classifying {os.path.basename(img_path)}: {e}")
-
-                    print(f"✅ {os.path.basename(img_path)} → {resnet_label}")
-                except (OSError, RuntimeError) as e:
-                    print(f"❌ Error classifying {os.path.basename(img_path)}: {e}")
-                    raise
 
             # === STEP 2.5: Ensure certificate + attestation pairing ===
             has_certificate = any(img["label"] == "certificate" for img in classified_images)
@@ -479,10 +460,6 @@ def main() -> None:
                         logger.info(f"⏭️ Skipping rotation check for {img_data['filename']} ({img_data['label']}) - not in rotation check list")
                 except Exception as e:
                     logger.warning(f"⚠️ Error rotating {img_data['filename']}: {e}")
-                        print(f"⏭️ Skipping rotation check for {img_data['filename']} ({img_data['label']}) - not in rotation check list")
-                except (OSError, RuntimeError) as e:
-                    print(f"⚠️ Error rotating {img_data['filename']}: {e}")
-                    raise
 
             # === STEP 2.7: If ResNet detects attestation page, keep original for downstream processing ===
             logger.info("📋 Checking for attestation pages detected by ResNet...")
@@ -490,15 +467,11 @@ def main() -> None:
 
             for attestation_img in attestation_images:
                 try:
-                    # Use the original, uncompressed page for all downstream processing
-                    attestation_img["full_page_path"] = attestation_img["path"]
-                    logger.info(f"ℹ️ Using uncompressed attestation page: {os.path.basename(attestation_img['path'])}")
+                    # Store the original image path before any cropping
+                    attestation_img["original_path"] = attestation_img["path"]
+                    logger.info(f"ℹ️ Stored original attestation page: {os.path.basename(attestation_img['path'])}")
                 except Exception as e:
                     logger.error(f"❌ Error processing attestation {attestation_img['filename']}: {e}")
-                    print(f"ℹ️ Using uncompressed attestation page: {os.path.basename(attestation_img['path'])}")
-                except (OSError, KeyError) as e:
-                    print(f"❌ Error processing attestation {attestation_img['filename']}: {e}")
-                    raise
             # === STEP 2.8: Run YOLO cropping for all documents ===
             logger.info("✂️ Running YOLO cropping for all documents...")
             for img_data in classified_images:
@@ -516,9 +489,6 @@ def main() -> None:
 
                 except Exception as e:
                     logger.error(f"❌ Error cropping {img_data['filename']}: {e}")
-                except (OSError, RuntimeError) as e:
-                    print(f"❌ Error cropping {img_data['filename']}: {e}")
-                    raise
 
             # === STEP 2.9: Run OCR for all documents with attestation fallback ===
             logger.info("📝 Running OCR for all documents...")
@@ -547,13 +517,8 @@ def main() -> None:
 
                 except Exception as e:
                     logger.error(f"❌ Error processing {img_data['filename']}: {e}")
-                except (OSError, RuntimeError, ValueError) as e:
-                    print(f"❌ Error processing {img_data['filename']}: {e}")
-                    raise
 
 
-            classified_images = classify_images(context, image_paths)
-            processed_images = perform_ocr(context, classified_images)
             if not processed_images:
                 logger.warning(f"⚠️ No processed images for {subject_folder}. Skipping folder.")
                 continue
@@ -614,6 +579,13 @@ def main() -> None:
                 email_text=email_text,
                 resnet_label=", ".join([img["label"] for img in processed_images]),
                 google_metadata=google_metadata
+            )
+
+            # Unpack the result
+            if isinstance(result, tuple):
+                final_structured, gemini_response = result
+            else:
+                final_structured, gemini_response = result, ""
 
             # Add detected service to structured output
             try:
@@ -639,10 +611,11 @@ def main() -> None:
                     logger.warning(f"⚠️ Could not parse final_structured as JSON: {e}")
                     logger.warning(f"⚠️ Raw final_structured: {final_structured[:200]}...")
                     final_structured = {}
-                    print(f"🔍 Debug - Successfully parsed JSON, mother's name: {mother_name}")
+                    mother_name = 'NOT FOUND'
                 except json.JSONDecodeError as e:
                     print(f"⚠️ Could not parse final_structured as JSON: {e}")
-                    raise
+                    final_structured = {}
+                    mother_name = 'NOT FOUND'
             else:
                 mother_name = final_structured.get('Mother\'s Name', 'NOT FOUND')
                 logger.debug(f"🔍 Debug - final_structured is already dict, mother's name: {mother_name}")
@@ -759,9 +732,9 @@ def main() -> None:
                     base = f"{first_name}_{doc_type}"
                 
                 # Use the appropriate path for saving
-                if img_data["label"] in ["certificate_attestation", "attestation_label"] and "full_page_path" in img_data:
-                    # For attestation pages, save the full page (not the cropped label)
-                    save_path = img_data["full_page_path"]
+                if img_data["label"] in ["certificate_attestation", "attestation_label"] and "original_path" in img_data:
+                    # For attestation pages, save the original uncropped page (not the cropped label)
+                    save_path = img_data["original_path"]
                 elif "cropped_path" in img_data:
                     save_path = img_data["cropped_path"]
                 elif "compressed_path" in img_data:
@@ -808,15 +781,7 @@ def main() -> None:
                 except Exception as e:
                     logger.warning(f"⚠️ Error in final compression for {img_data['filename']}: {e}")
 
-                except (OSError, RuntimeError) as e:
-                    print(f"⚠️ Error in final compression for {img_data['filename']}: {e}")
-                    raise
-
-            final_structured, gemini_response = gemini_structuring(
-                context, processed_images, salary_data, email_text, requested_service, service_needed
-
-            )
-
+            # Save results using the existing function
             save_results(
                 context,
                 subject_folder,
@@ -844,9 +809,6 @@ def main() -> None:
     except (OSError, subprocess.SubprocessError, FileNotFoundError) as e:
         print(f"⚠️ Could not automatically open file explorer: {e}")
         print(f"📂 Please manually navigate to: {absolute_output_dir}")
-
-    print("\n📂 Opening file explorer to view processed documents...")
-    open_file_explorer(os.path.abspath(context.output_dir))
 
 
 if __name__ == "__main__":

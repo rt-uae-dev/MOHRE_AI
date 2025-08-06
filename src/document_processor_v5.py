@@ -30,7 +30,7 @@ CLASS_NAMES = sorted([
 ])
 model = models.resnet18()
 model.fc = torch.nn.Linear(model.fc.in_features, len(CLASS_NAMES))
-model.load_state_dict(torch.load(str(MODEL_PATH), map_location=torch.device('cpu')))
+model.load_state_dict(torch.load(str(MODEL_PATH), map_location=torch.device('cpu'), weights_only=True))
 model.eval()
 
 transform = transforms.Compose([

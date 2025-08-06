@@ -50,30 +50,59 @@ class DocumentAIProcessor:
             with open(image_path, "rb") as image:
                 image_content = image.read()
             
-            # Create the document
-            document = {"content": image_content, "mime_type": "image/jpeg"}
+            # Create the document using the proper Document AI format
+            from google.cloud import documentai_v1 as documentai
             
-            # Process the document - fix the request format
-            request = {
-                "name": self.processor_name, 
-                "raw_document": document  # Changed from "document" to "raw_document"
-            }
+            raw_document = documentai.RawDocument(
+                content=image_content,
+                mime_type="image/jpeg"
+            )
+            
+            # Process the document with proper request format
+            request = documentai.ProcessRequest(
+                name=self.processor_name,
+                raw_document=raw_document
+            )
             result = self.client.process_document(request=request)
             document = result.document
             
             # Extract text and confidence data
             ocr_data = self._extract_ocr_data(document)
             
+            # Document AI Document OCR Processor doesn't provide confidence scores
+            # Use text quality as a proxy for confidence
+            text_length = len(document.text)
+            text_blocks = len(ocr_data.get('text_blocks', []))
+            
+            # Estimate confidence based on text quality indicators
+            if text_length > 100 and text_blocks > 5:
+                estimated_confidence = 0.8  # High confidence for good text
+            elif text_length > 50 and text_blocks > 2:
+                estimated_confidence = 0.6  # Medium confidence
+            elif text_length > 10:
+                estimated_confidence = 0.4  # Low confidence
+            else:
+                estimated_confidence = 0.1  # Very low confidence
+            
+            # Debug information
+            print(f"   📊 Document AI Debug Info:")
+            print(f"      - Text length: {text_length} characters")
+            print(f"      - Pages: {len(document.pages)}")
+            print(f"      - Text blocks: {text_blocks}")
+            print(f"      - Estimated confidence: {estimated_confidence:.3f}")
+            
             return {
                 "success": True,
                 "full_text": document.text,
                 "ocr_data": ocr_data,
-                "confidence": getattr(document, 'confidence', 0.0),  # Use getattr for confidence
+                "confidence": estimated_confidence,  # Use estimated confidence
                 "pages": len(document.pages)
             }
             
         except Exception as e:
             print(f"❌ Document AI processing failed: {e}")
+            import traceback
+            traceback.print_exc()
             return {"error": str(e)}
     
     def _extract_ocr_data(self, document) -> Dict:

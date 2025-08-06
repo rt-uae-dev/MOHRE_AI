@@ -99,7 +99,7 @@ class EnhancedDocumentProcessor:
             model_path = "models/resnet_classifier.pt"  # Use the correct path
             if os.path.exists(model_path):
                 # Load the model state dict
-                state_dict = torch.load(model_path, map_location=self.device)
+                state_dict = torch.load(model_path, map_location=self.device, weights_only=True)
                 
                 # Create ResNet model (assuming ResNet18, adjust as needed)
                 from torchvision import models
