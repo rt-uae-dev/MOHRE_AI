@@ -13,7 +13,7 @@ from tkinter import filedialog, messagebox
 try:
     from tkinterdnd2 import DND_FILES, TkinterDnD
     TKDND_AVAILABLE = True
-except Exception:
+except ImportError:
     TKDND_AVAILABLE = False
 
 # Ensure src directory is in path when running standalone
@@ -24,6 +24,24 @@ from main_pipeline import main as run_full_pipeline
 from pdf_converter import convert_pdf_to_jpg
 from yolo_crop_ocr_pipeline import run_yolo_crop, run_enhanced_ocr
 from structure_with_gemini import structure_with_gemini
+
+from pdf2image.exceptions import (
+    PDFInfoNotInstalledError,
+    PDFPageCountError,
+    PDFPopplerTimeoutError,
+    PDFSyntaxError,
+    PopplerNotInstalledError,
+)
+
+PROCESSING_ERRORS = (
+    OSError,
+    RuntimeError,
+    PDFInfoNotInstalledError,
+    PDFPageCountError,
+    PDFPopplerTimeoutError,
+    PDFSyntaxError,
+    PopplerNotInstalledError,
+)
 
 TEMP_DIR = os.path.join("data", "temp")
 
@@ -154,8 +172,9 @@ class ManualProcessingWindow(tk.Toplevel):
                     out_path = os.path.join(output_dir, out_name)
                     with open(out_path, "w", encoding="utf-8") as f:
                         json.dump(structured, f, ensure_ascii=False, indent=2)
-            except Exception as e:
-                print(f"Error processing {file_path}: {e}")
+            except PROCESSING_ERRORS as e:
+                messagebox.showerror("Processing Error", f"Failed to process {file_path}: {e}")
+                raise
         self.status_label.config(text="Processing complete")
         messagebox.showinfo("MOHRE", "Manual processing completed")
 

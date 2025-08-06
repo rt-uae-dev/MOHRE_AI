@@ -5,18 +5,21 @@ from pathlib import Path
 # Optional third-party imports; module works with standard library if unavailable
 try:  # pragma: no cover - requests may not be installed in minimal environments
     import requests
-except Exception:  # pragma: no cover
+    RequestException = requests.RequestException
+except ImportError:  # pragma: no cover
     requests = None
+    class RequestException(Exception):  # type: ignore
+        pass
 
 try:  # pragma: no cover - BeautifulSoup may not be installed
     from bs4 import BeautifulSoup
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     BeautifulSoup = None
 
 # Optional Gemini import
 try:  # pragma: no cover - Gemini is optional
     import google.generativeai as genai
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     genai = None
 
 # Configure Gemini API if available
@@ -36,8 +39,8 @@ def _load_local_services() -> list[str]:
             data = json.load(f)
             if isinstance(data, list):
                 return [s for s in data if isinstance(s, str)]
-    except Exception:  # pragma: no cover - failure falls back to default list
-        pass
+    except (OSError, json.JSONDecodeError) as e:  # pragma: no cover - failure falls back to default list
+        print(f"⚠️ Could not load local services: {e}")
     return []
 
 
@@ -118,8 +121,9 @@ def fetch_mohre_services() -> list[str]:
                 text = (link.get_text() or "").strip()
                 if text and "services" not in text.lower() and len(text.split()) <= 8:
                     services.append(text)
-        except Exception as e:  # pragma: no cover - network issues
+        except RequestException as e:  # pragma: no cover - network issues
             print(f"⚠️ Could not fetch MOHRE services: {e}")
+            raise
 
     if not services:
         services = _load_local_services()
@@ -163,7 +167,16 @@ def detect_service_from_email(email_text: str, services: list | None = None) -> 
     str
         The detected service name or "Unknown Service" if not determined.
     """
-    services = services or fetch_mohre_services() or DEFAULT_SERVICES
+    services = services or []
+    if not services:
+        try:
+            services = fetch_mohre_services()
+        except RequestException as e:
+            print(
+                f"⚠️ Could not retrieve live MOHRE services: {e}. Using fallback list."
+            )
+            services = DEFAULT_SERVICES
+    services = services or DEFAULT_SERVICES
 
     # Use Gemini if API key configured
     if api_key:
@@ -179,7 +192,9 @@ def detect_service_from_email(email_text: str, services: list | None = None) -> 
             if response and response.text:
                 return response.text.strip()
         except Exception as e:
-            print(f"⚠️ Gemini service detection failed: {e}")
+            print(
+                f"⚠️ Gemini service detection failed: {e}. Check API key and network connection."
+            )
 
     # Fallback to simple keyword match
     return _simple_keyword_match(email_text, services)

@@ -17,7 +17,7 @@ import subprocess
 import platform
 import re
 from email_parser import fetch_and_store_emails
-from pdf_converter import convert_pdf_to_jpg
+from pdf_converter import convert_pdf_to_jpg, PDF_ERRORS
 from resnet18_classifier import classify_image_resnet
 from yolo_crop_ocr_pipeline import run_yolo_crop, run_enhanced_ocr
 from structure_with_gemini import structure_with_gemini
@@ -49,11 +49,11 @@ def open_file_explorer(directory_path: str):
         else:
             # Linux
             subprocess.run(["xdg-open", directory_path], check=True)
-        
+
         print(f"📂 Opened file explorer to: {directory_path}")
-    except Exception as e:
+    except (FileNotFoundError, subprocess.CalledProcessError, OSError) as e:
         print(f"⚠️ Could not open file explorer: {e}")
-        print(f"📂 Please manually navigate to: {os.path.abspath(directory_path)}")
+        raise
 
 def main():
     # === STEP 1: Fetch emails ===
@@ -132,8 +132,12 @@ def main():
                 file_path = os.path.join(subject_path, filename)
                 if filename.lower().endswith(".pdf"):
                     print(f"📄 Converting: {filename}")
-                    jpg_paths = convert_pdf_to_jpg(file_path, TEMP_DIR)
-                    all_image_paths.extend(jpg_paths)
+                    try:
+                        jpg_paths = convert_pdf_to_jpg(file_path, TEMP_DIR)
+                        all_image_paths.extend(jpg_paths)
+                    except PDF_ERRORS as e:
+                        print(f"❌ Failed to convert {filename}: {e}")
+                        continue
                 elif filename.lower().endswith((".jpg", ".jpeg", ".png")):
                     # Copy existing images to temp without compression (for best OCR quality)
                     temp_path = os.path.join(TEMP_DIR, filename)
@@ -549,7 +553,11 @@ def main():
     # Open file explorer to the COMPLETED directory
     print(f"\n📂 Opening file explorer to view processed documents...")
     absolute_output_dir = os.path.abspath(OUTPUT_DIR)
-    open_file_explorer(absolute_output_dir)
+    try:
+        open_file_explorer(absolute_output_dir)
+    except (OSError, subprocess.SubprocessError, FileNotFoundError) as e:
+        print(f"⚠️ Could not automatically open file explorer: {e}")
+        print(f"📂 Please manually navigate to: {absolute_output_dir}")
 
 if __name__ == "__main__":
     main()
