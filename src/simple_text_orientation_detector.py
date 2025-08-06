@@ -30,6 +30,7 @@ def detect_text_orientation_simple(image_path: str) -> dict:
                 "rotation_angle": 0,
                 "confidence": 0.0,
                 "reason": "Failed to read image",
+                "detected_text_length": 0,
             }
 
         orientations = [
@@ -90,6 +91,7 @@ def detect_text_orientation_simple(image_path: str) -> dict:
             "rotation_angle": 0,
             "confidence": 0.0,
             "reason": f"Error: {str(e)}",
+            "detected_text_length": 0,
         }
 
 

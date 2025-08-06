@@ -1,6 +1,7 @@
 import os
 import sys
 import types
+import pytest
 from src.logger import configure_logging
 
 def pytest_configure():
@@ -41,3 +42,9 @@ def pytest_configure():
     sys.modules.setdefault('google.cloud', google_stub.cloud)
     sys.modules.setdefault('google.cloud.vision', vision_stub)
     sys.modules.setdefault('google.cloud.documentai_v1', documentai_stub)
+
+
+@pytest.fixture
+def image_path():
+    """Provide path to a sample passport image for tests that require one."""
+    return os.path.join("data", "temp", "Yogeshkumar Sant  Passport copy_page_1_1_1_1_pil_compressed.jpg")
