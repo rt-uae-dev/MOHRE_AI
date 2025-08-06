@@ -9,11 +9,16 @@ from PIL import Image
 import google.generativeai as genai
 from pathlib import Path
 from dotenv import load_dotenv
+from config import get_config
+
+# Configure Google Gemini API
+config = get_config()
+genai.configure(api_key=config.gemini_api_key)
 
 # === CONFIG ===
 BASE_DIR = Path(__file__).resolve().parents[1]
-DATASET_DIR = os.getenv("DATASET_DIR", str(BASE_DIR / "data" / "dataset"))
-MODEL_PATH = os.getenv("MODEL_PATH", str(BASE_DIR / "models" / "classifier.pt"))
+DATASET_DIR = str(config.dataset_dir)
+MODEL_PATH = str(config.model_path)
 
 # === Device setup ===
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

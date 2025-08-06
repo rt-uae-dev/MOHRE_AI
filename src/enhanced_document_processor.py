@@ -14,19 +14,19 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 from google.cloud import documentai_v1 as documentai
-from dotenv import load_dotenv
+from config import get_config
 
 # Import simple Google Vision orientation detection
 from google_vision_orientation_detector import rotate_if_needed
 from yolo_crop_ocr_pipeline import run_google_vision_ocr
 
-# Load environment variables
-load_dotenv()
+# Load configuration
+config = get_config()
 
 # Set Google Application Credentials for Document AI
-google_creds_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'GOOGLEAPI.json')
-if os.path.exists(google_creds_path):
-    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = google_creds_path
+google_creds_path = config.google_application_credentials
+if google_creds_path and google_creds_path.exists():
+    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = str(google_creds_path)
     print(f"✅ Document AI credentials set: {google_creds_path}")
 else:
     print(f"⚠️ Document AI credentials not found at: {google_creds_path}")
@@ -253,7 +253,10 @@ class EnhancedDocumentProcessor:
                 image_content = image.read()
 
             # Configure the process request
-            name = f"projects/{os.getenv('GOOGLE_CLOUD_PROJECT_ID')}/locations/us/processors/{os.getenv('DOCUMENT_AI_PROCESSOR_ID')}"
+            name = (
+                f"projects/{config.google_cloud_project_id}/locations/us/"
+                f"processors/{config.document_ai_processor_id}"
+            )
 
             raw_document = documentai.RawDocument(content=image_content, mime_type="image/jpeg")
             request = documentai.ProcessRequest(name=name, raw_document=raw_document)
