@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mohre_ai"
+version = "0.1.0"
+description = "MOHRE Document Processing Pipeline"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "google-cloud-documentai",
+    "google-cloud-vision",
+    "google-generativeai",
+    "numpy",
+    "opencv-python",
+    "pillow",
+    "torch",
+    "torchvision",
+    "ultralytics",
+    "pdf2image",
+    "pymupdf",
+    "python-docx",
+    "python-dotenv",
+    "pytest",
+    "tkinterdnd2",
+]
+
+[tool.setuptools]
+packages = ["mohre_ai"]
+package-dir = { "mohre_ai" = "src" }

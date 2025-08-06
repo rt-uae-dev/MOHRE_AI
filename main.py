@@ -4,7 +4,6 @@ MOHRE Document Processing Pipeline
 Main Entry Point
 """
 
-import sys
 import os
 
 # Add src directory to path
@@ -23,5 +22,6 @@ if google_creds_path and google_creds_path.exists():
 else:
     print(f"⚠️ Warning: Google API credentials file not found at {google_creds_path}")
 
+from mohre_ai.gui_app import run_gui
 if __name__ == "__main__":
     run_gui()
