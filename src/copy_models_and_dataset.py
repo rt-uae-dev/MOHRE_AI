@@ -7,9 +7,9 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
+from config import get_config
 
-load_dotenv()
+config = get_config()
 
 def copy_models_and_dataset():
     """Copy trained models and dataset to MOHRE folder."""
@@ -20,9 +20,9 @@ def copy_models_and_dataset():
     base_dir = Path(__file__).resolve().parents[1]
 
     # Source paths (can be overridden via environment variables)
-    source_yolo_model = Path(os.getenv("SOURCE_YOLO_MODEL", base_dir / "models" / "yolo8_best.pt"))
-    source_classifier_model = Path(os.getenv("SOURCE_CLASSIFIER_MODEL", base_dir / "models" / "classifier.pt"))
-    source_dataset = Path(os.getenv("SOURCE_DATASET", base_dir / "data" / "dataset"))
+    source_yolo_model = config.source_yolo_model
+    source_classifier_model = config.source_classifier_model
+    source_dataset = config.source_dataset
 
     # Destination paths in MOHRE folder
     dest_models_dir = base_dir / "models"

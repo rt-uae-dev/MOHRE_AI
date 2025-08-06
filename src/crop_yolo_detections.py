@@ -1,21 +1,19 @@
 from ultralytics import YOLO
 import cv2
 import os
-from pathlib import Path
-from dotenv import load_dotenv
+from config import get_config
 
 # === CONFIGURATION ===
-load_dotenv()
-base_dir = Path(__file__).resolve().parents[1]
-model_path = os.getenv("YOLO_MODEL_PATH", str(base_dir / "models" / "yolo8_best.pt"))
-input_root = os.getenv("INPUT_ROOT", str(base_dir / "data" / "dataset"))
-output_root = os.getenv("OUTPUT_ROOT", str(base_dir / "data" / "processed" / "COMPLETED"))
+config = get_config()
+model_path = config.yolo_model_path
+input_root = config.input_root
+output_root = config.output_root
 
 # Load model
-model = YOLO(model_path)
+model = YOLO(str(model_path))
 
 # Recursively walk through subfolders
-for root, _, files in os.walk(input_root):
+for root, _, files in os.walk(str(input_root)):
     for filename in files:
         if filename.lower().endswith(('.jpg', '.png', '.jpeg')):
             input_path = os.path.join(root, filename)

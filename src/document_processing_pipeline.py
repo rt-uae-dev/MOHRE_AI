@@ -7,7 +7,8 @@ from resnet18_classifier import (
     classify_image_from_text,
     classify_image_with_gemini_vision,
     check_image_orientation,
-    auto_rotate_image_if_needed
+    auto_rotate_image_if_needed,
+    load_resnet_model
 )
 from logger import get_logger
 
@@ -264,7 +265,11 @@ def classify_and_ocr(image_path: str, temp_dir: str):
         - vision_data: {ocr_text, angle, labels, document_type, extracted_fields, confidence}
         - final label (resnet or Gemini fallback)
     """
+
     logger.info(f"\n🔁 Processing: {os.path.basename(image_path)}")
+    load_resnet_model()
+    print(f"\n🔁 Processing: {os.path.basename(image_path)}")
+
 
     # Step 1: Crop the image
     cropped_path = run_yolo_crop(image_path, temp_dir)

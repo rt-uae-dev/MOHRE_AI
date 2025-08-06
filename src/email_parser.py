@@ -5,16 +5,16 @@ import time
 import shutil
 from email.header import decode_header
 from email.utils import parseaddr
-from dotenv import load_dotenv
 from datetime import datetime
+from config import get_config
 
 # Load environment variables
-load_dotenv()
+config = get_config()
 
-EMAIL = os.getenv("EMAIL_ADDRESS")
-PASSWORD = os.getenv("EMAIL_PASSWORD")
-IMAP_SERVER = os.getenv("IMAP_SERVER")
-DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "data/raw/downloads")
+EMAIL = config.email_address
+PASSWORD = config.email_password
+IMAP_SERVER = config.imap_server
+DOWNLOAD_DIR = str(config.download_dir)
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
