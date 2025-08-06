@@ -1,3 +1,5 @@
+"""Utility to compress images to meet size constraints."""
+
 from PIL import Image
 import os
 

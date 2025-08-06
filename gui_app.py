@@ -8,7 +8,7 @@ import threading
 import json
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from typing import Iterable, List, Callable
+from typing import Iterable, List
 
 # Optional drag and drop support
 try:
@@ -72,13 +72,16 @@ class ManualProcessingWindow(tk.Toplevel):
 
         Args:
             master: Parent widget that owns this window.
+
+        Returns:
+            None
         """
         super().__init__(master)
         self.title("Manual Processing")
         self.geometry("500x400")
         self.file_paths: List[str] = []
 
-        self.file_area = tk.Frame(self, relief=tk.SUNKEN, borderwidth=1)
+        self.file_area: tk.Frame = tk.Frame(self, relief=tk.SUNKEN, borderwidth=1)
         self.file_area.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         if TKDND_AVAILABLE:
@@ -89,28 +92,46 @@ class ManualProcessingWindow(tk.Toplevel):
         button_frame.pack(fill=tk.X, padx=10, pady=5)
 
         tk.Button(button_frame, text="Add Files", command=self._browse_files).pack(side=tk.LEFT)
-        self.start_button = tk.Button(
+        self.start_button: tk.Button = tk.Button(
             button_frame, text="Start Processing", command=self._start_processing, state=tk.DISABLED
         )
         self.start_button.pack(side=tk.RIGHT)
 
-        self.status_label = tk.Label(self, text="")
+        self.status_label: tk.Label = tk.Label(self, text="")
         self.status_label.pack(pady=5)
 
     def _browse_files(self) -> None:
-        """Open a file dialog for the user to select files."""
+        """Open a file dialog for the user to select files.
+
+        Returns:
+            None
+        """
         paths = filedialog.askopenfilenames(
             filetypes=[("Documents", "*.pdf *.jpg *.jpeg *.png"), ("All Files", "*.*")]
         )
         self._add_files(paths)
 
     def _drop_files(self, event: tk.Event) -> None:
-        """Handle file drops when drag-and-drop is available."""
+        """Handle file drops when drag-and-drop is available.
+
+        Args:
+            event: Tkinter drop event containing file paths.
+
+        Returns:
+            None
+        """
         paths = self.tk.splitlist(event.data)  # type: ignore[attr-defined]
         self._add_files(paths)
 
     def _add_files(self, paths: Iterable[str]) -> None:
-        """Add file paths to the list and create display widgets."""
+        """Add file paths to the list and create display widgets.
+
+        Args:
+            paths: Iterable collection of file paths selected by the user.
+
+        Returns:
+            None
+        """
         for path in paths:
             if path and path not in self.file_paths:
                 self.file_paths.append(path)
@@ -119,17 +140,33 @@ class ManualProcessingWindow(tk.Toplevel):
             self.start_button.config(state=tk.NORMAL)
 
     def _add_file_widget(self, path: str) -> None:
-        """Create a row widget showing the file name with a remove button."""
+        """Create a row widget showing the file name with a remove button.
+
+        Args:
+            path: File path represented by the widget.
+
+        Returns:
+            None
+        """
         row = tk.Frame(self.file_area)
         row.pack(fill=tk.X, padx=5, pady=2)
         tk.Label(row, text=os.path.basename(path), anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
+
         def callback(p: str = path, r: tk.Widget = row) -> None:
             self._remove_file(p, r)
 
         tk.Button(row, text="X", command=callback).pack(side=tk.RIGHT)
 
     def _remove_file(self, path: str, row: tk.Widget) -> None:
-        """Remove a file from the list and destroy its widget."""
+        """Remove a file from the list and destroy its widget.
+
+        Args:
+            path: File path to remove.
+            row: Row widget associated with ``path``.
+
+        Returns:
+            None
+        """
         if path in self.file_paths:
             self.file_paths.remove(path)
             row.destroy()
@@ -137,7 +174,11 @@ class ManualProcessingWindow(tk.Toplevel):
             self.start_button.config(state=tk.DISABLED)
 
     def _start_processing(self) -> None:
-        """Start processing of the selected files in a background thread."""
+        """Start processing of the selected files in a background thread.
+
+        Returns:
+            None
+        """
         output_dir = filedialog.askdirectory(title="Select Output Directory")
         if not output_dir:
             output_dir = os.path.join("data", "processed", "manual")

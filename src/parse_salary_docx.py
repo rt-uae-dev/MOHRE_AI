@@ -1,3 +1,5 @@
+"""Parsers for extracting salary information from DOCX files."""
+
 from docx import Document
 import re
 from typing import Dict, Any
