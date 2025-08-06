@@ -10,6 +10,7 @@ import google.generativeai as genai
 from pathlib import Path
 from dotenv import load_dotenv
 from logger import get_logger
+import threading
 
 load_dotenv()
 from config import get_config
@@ -28,118 +29,93 @@ MODEL_PATH = str(config.model_path)
 # === Device setup ===
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# === Dynamically determine number of classes ===
-if os.path.exists(DATASET_DIR):
-    ORIGINAL_CLASSES = len([d for d in os.listdir(DATASET_DIR) if os.path.isdir(os.path.join(DATASET_DIR, d))])
-    logger.debug(f"🔍 Dynamically determined {ORIGINAL_CLASSES} classes from dataset")
-else:
-    ORIGINAL_CLASSES = 23  # Fallback to 23 classes if dataset directory doesn't exist
-    logger.warning(f"⚠️ Using fallback: {ORIGINAL_CLASSES} classes")
-
 # === Globals initialized lazily ===
+# These resources are mutated only while holding `_model_lock` to ensure
+# thread-safe initialization and reuse.
+_model_lock = threading.Lock()
 model = None
 transform = None
 model_loaded_successfully = False
 CLASS_NAMES = []
 ORIGINAL_CLASSES = 0
 
-
-# Try to load the model
-model_loaded_successfully = False
-try:
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
-    logger.info(f"✅ Model loaded successfully with {ORIGINAL_CLASSES} classes")
-    model_loaded_successfully = True
-except RuntimeError as e:
-    if "size mismatch" in str(e):
-        logger.warning(f"⚠️ Model size mismatch. Expected {ORIGINAL_CLASSES} classes but model has different size.")
-        logger.info("🔄 Creating new model with correct size...")
-        # Create a new model with the correct number of classes
-        model = models.resnet18()
-        model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
-        logger.info(f"✅ Created new model with {ORIGINAL_CLASSES} classes")
-        logger.warning("⚠️ WARNING: This is an untrained model and will make random predictions!")
-        logger.info("🔄 Will use Gemini Vision as fallback for classification")
-    else:
-        raise e
-except FileNotFoundError:
-    logger.warning(f"⚠️ Model file not found: {MODEL_PATH}")
-    logger.info("🔄 Creating new model with correct size...")
-    model = models.resnet18()
-    model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
-    logger.info(f"✅ Created new model with {ORIGINAL_CLASSES} classes")
-    logger.warning("⚠️ WARNING: This is an untrained model and will make random predictions!")
-    logger.info("🔄 Will use Gemini Vision as fallback for classification")
-
 def load_resnet_model():
-    """
-    Lazily load the ResNet model and related resources.
-    This should be called before using any classification functions.
-    """
+    """Lazily load the ResNet model and related resources."""
     global model, transform, model_loaded_successfully, CLASS_NAMES, ORIGINAL_CLASSES
 
-    if model is not None:
-        return model
+    with _model_lock:
+        if model is not None:
+            return model
 
-    load_dotenv()
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        load_dotenv()
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-    if os.path.exists(DATASET_DIR):
-        CLASS_NAMES = sorted(
-            d for d in os.listdir(DATASET_DIR)
-            if os.path.isdir(os.path.join(DATASET_DIR, d))
-        )
-        ORIGINAL_CLASSES = len(CLASS_NAMES)
-        print(f"🔍 Dynamically determined {ORIGINAL_CLASSES} classes from dataset")
-    else:
-        CLASS_NAMES = [
-            'ID_Reg', 'Job_offer', 'Submit_work_permit_cancellation', 'certificate',
-            'certificate_attestation', 'contract', 'emirates_id', 'emirates_id_2',
-            'employee_info_form', 'form_signature_page', 'forms', 'ica-issue_residence',
-            'national_ID', 'passport_1', 'passport_2', 'personal_photo', 'preapproval_workpermit',
-            'residence_cancellation', 'salary_documents', 'step1_mohre', 'unknown', 'visa',
-            'work_permit_cancellation'
-        ]
-        ORIGINAL_CLASSES = len(CLASS_NAMES)
-        print(f"⚠️ Using fallback: {ORIGINAL_CLASSES} classes")
-
-    model = models.resnet18()
-    model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
-
-    try:
-        model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
-        print(f"✅ Model loaded successfully with {ORIGINAL_CLASSES} classes")
-        model_loaded_successfully = True
-    except RuntimeError as e:
-        if "size mismatch" in str(e):
-            print(f"⚠️ Model size mismatch. Expected {ORIGINAL_CLASSES} classes but model has different size.")
-            print("🔄 Creating new model with correct size...")
-            model = models.resnet18()
-            model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
-            print(f"✅ Created new model with {ORIGINAL_CLASSES} classes")
-            print("⚠️ WARNING: This is an untrained model and will make random predictions!")
-            print("🔄 Will use Gemini Vision as fallback for classification")
+        if os.path.exists(DATASET_DIR):
+            CLASS_NAMES = sorted(
+                d for d in os.listdir(DATASET_DIR)
+                if os.path.isdir(os.path.join(DATASET_DIR, d))
+            )
+            ORIGINAL_CLASSES = len(CLASS_NAMES)
+            logger.debug(f"🔍 Dynamically determined {ORIGINAL_CLASSES} classes from dataset")
         else:
-            raise e
-    except FileNotFoundError:
-        print(f"⚠️ Model file not found: {MODEL_PATH}")
-        print("🔄 Creating new model with correct size...")
+            CLASS_NAMES = [
+                'ID_Reg', 'Job_offer', 'Submit_work_permit_cancellation', 'certificate',
+                'certificate_attestation', 'contract', 'emirates_id', 'emirates_id_2',
+                'employee_info_form', 'form_signature_page', 'forms', 'ica-issue_residence',
+                'national_ID', 'passport_1', 'passport_2', 'personal_photo', 'preapproval_workpermit',
+                'residence_cancellation', 'salary_documents', 'step1_mohre', 'unknown', 'visa',
+                'work_permit_cancellation'
+            ]
+            ORIGINAL_CLASSES = len(CLASS_NAMES)
+            logger.warning(f"⚠️ Using fallback: {ORIGINAL_CLASSES} classes")
+
         model = models.resnet18()
         model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
-        print(f"✅ Created new model with {ORIGINAL_CLASSES} classes")
-        print("⚠️ WARNING: This is an untrained model and will make random predictions!")
-        print("🔄 Will use Gemini Vision as fallback for classification")
 
-    model.to(device)
-    model.eval()
+        try:
+            model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
+            logger.info(f"✅ Model loaded successfully with {ORIGINAL_CLASSES} classes")
+            model_loaded_successfully = True
+        except RuntimeError as e:
+            if "size mismatch" in str(e):
+                logger.warning(f"⚠️ Model size mismatch. Expected {ORIGINAL_CLASSES} classes but model has different size.")
+                logger.info("🔄 Creating new model with correct size...")
+                model = models.resnet18()
+                model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
+                logger.info(f"✅ Created new model with {ORIGINAL_CLASSES} classes")
+                logger.warning("⚠️ WARNING: This is an untrained model and will make random predictions!")
+                logger.info("🔄 Will use Gemini Vision as fallback for classification")
+            else:
+                raise e
+        except FileNotFoundError:
+            logger.warning(f"⚠️ Model file not found: {MODEL_PATH}")
+            logger.info("🔄 Creating new model with correct size...")
+            model = models.resnet18()
+            model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
+            logger.info(f"✅ Created new model with {ORIGINAL_CLASSES} classes")
+            logger.warning("⚠️ WARNING: This is an untrained model and will make random predictions!")
+            logger.info("🔄 Will use Gemini Vision as fallback for classification")
 
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
+        model.to(device)
+        model.eval()
 
-    return model
+        transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+
+        return model
+
+# Optionally preload the model to minimize contention when used in multi-threaded
+# environments. Set the environment variable `PRELOAD_RESNET_MODEL` to "1" or
+# "true" to enable preloading.
+if os.getenv("PRELOAD_RESNET_MODEL", "0").lower() in {"1", "true"}:
+    try:
+        load_resnet_model()
+        logger.debug("ResNet model preloaded at import time")
+    except Exception as e:
+        logger.warning(f"Model preload failed: {e}")
 
 # === Classify image ===
 def classify_image_resnet(image_path: str) -> str:
