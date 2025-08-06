@@ -9,9 +9,9 @@ import base64
 import json
 import google.generativeai as genai
 import cv2
-from dotenv import load_dotenv
+from config import get_config
 
-load_dotenv()
+config = get_config()
 
 def ask_gemini_if_needs_rotation(image_path: str) -> dict:
     """
@@ -25,7 +25,7 @@ def ask_gemini_if_needs_rotation(image_path: str) -> dict:
     """
     try:
         # Configure Gemini
-        genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+        genai.configure(api_key=config.google_api_key)
         
         # Use Gemini 2.5 Flash
         model = genai.GenerativeModel('gemini-2.5-flash')

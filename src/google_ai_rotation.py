@@ -11,11 +11,11 @@ import base64
 import google.generativeai as genai
 from PIL import Image
 import io
-from dotenv import load_dotenv
+from config import get_config
 
 # Configure Google Gemini API
-load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+config = get_config()
+genai.configure(api_key=config.gemini_api_key)
 
 # Only rotate these document types
 ROTATABLE_CLASSES = {"passport_1", "passport_2", "personal_photo", "certificate"}
