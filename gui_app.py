@@ -238,23 +238,17 @@ class ManualProcessingWindow(tk.Toplevel):
                             "manual",
                             {},
                         )
-                        out_name = (
-                            os.path.splitext(os.path.basename(img))[0] + "_output.json"
-                        )
+                        out_name = os.path.splitext(os.path.basename(img))[0] + "_output.json"
                         out_path = os.path.join(output_dir, out_name)
                         with open(out_path, "w", encoding="utf-8") as f:
                             json.dump(structured, f, ensure_ascii=False, indent=2)
+                except PROCESSING_ERRORS as e:
+                    messagebox.showerror("Processing Error", f"Failed to process {file_path}: {e}")
+                    raise
                 except Exception as e:
                     logger.error(f"Error processing {file_path}: {e}")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
-
-            except PROCESSING_ERRORS as e:
-                messagebox.showerror("Processing Error", f"Failed to process {file_path}: {e}")
-                raise
-
-            except Exception as e:  # pragma: no cover - runtime safeguard
-                print(f"Error processing {file_path}: {e}")
 
         self.status_label.config(text="Processing complete")
         messagebox.showinfo("MOHRE", "Manual processing completed")
