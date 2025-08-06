@@ -8,6 +8,15 @@ import threading
 import json
 import tkinter as tk
 from tkinter import filedialog, messagebox
+import logging
+
+# Ensure src directory is in path when running standalone
+SRC_DIR = os.path.join(os.path.dirname(__file__), "src")
+if SRC_DIR not in sys.path:
+    sys.path.append(SRC_DIR)
+
+from logger import configure_logging, get_logger
+
 from typing import Iterable, List
 
 # Optional drag and drop support
@@ -16,10 +25,6 @@ try:
     TKDND_AVAILABLE = True
 except ImportError:
     TKDND_AVAILABLE = False
-
-# Ensure src directory is in path when running standalone
-if os.path.join(os.path.dirname(__file__), "src") not in sys.path:
-    sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
 from main_pipeline import main as run_full_pipeline
 from pdf_converter import convert_pdf_to_jpg, PDF_ERRORS
@@ -31,6 +36,8 @@ PROCESSING_ERRORS = PDF_ERRORS + (RuntimeError,)
 
 TEMP_DIR = os.path.join("data", "temp")
 
+configure_logging()
+logger = get_logger(__name__)
 
 def run_gui() -> None:
     """Launch the main GUI window.
@@ -235,6 +242,9 @@ class ManualProcessingWindow(tk.Toplevel):
                     out_path = os.path.join(output_dir, out_name)
                     with open(out_path, "w", encoding="utf-8") as f:
                         json.dump(structured, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                logger.error(f"Error processing {file_path}: {e}")
+
             except PROCESSING_ERRORS as e:
                 messagebox.showerror("Processing Error", f"Failed to process {file_path}: {e}")
                 raise
