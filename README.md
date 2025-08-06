@@ -167,6 +167,7 @@ MOHRE/
 - **Gemini Structuring**: AI-powered document data extraction with Document AI fields ⭐ ENHANCED
 - **Gemini Vision Fallback**: Vision-based classification for attestation documents ⭐ NEW
 - **Auto-Orientation Check**: Automatic orientation analysis for passport photos and certificates ⭐ NEW
+- **Isolated Temp Workspace**: Each pipeline run uses a unique temporary directory that is removed after processing ⭐ NEW
 
 ### Document Types Supported
 - 📄 **Passport** (Page 1 & 2) - Enhanced with Document AI field extraction

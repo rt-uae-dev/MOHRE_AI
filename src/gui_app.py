@@ -5,6 +5,7 @@ import os
 import shutil
 import threading
 import json
+import tempfile
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import queue
@@ -20,8 +21,6 @@ from mohre_ai.main_pipeline import main as run_full_pipeline
 from mohre_ai.pdf_converter import convert_pdf_to_jpg
 from mohre_ai.yolo_crop_ocr_pipeline import run_yolo_crop, run_enhanced_ocr
 from mohre_ai.structure_with_gemini import structure_with_gemini
-
-TEMP_DIR = os.path.join("data", "temp")
 
 
 def run_gui():
@@ -134,6 +133,44 @@ class ManualProcessingWindow(tk.Toplevel):
         self.after(100, self._process_queue)
 
     def _process_files(self, paths, output_dir):
+        temp_dir = tempfile.mkdtemp(prefix="mohre_manual_")
+        try:
+            for file_path in paths:
+                try:
+                    images = []
+                    if file_path.lower().endswith(".pdf"):
+                        images = convert_pdf_to_jpg(file_path, temp_dir)
+                    else:
+                        temp_path = os.path.join(temp_dir, os.path.basename(file_path))
+                        shutil.copy2(file_path, temp_path)
+                        images = [temp_path]
+
+                    for img in images:
+                        cropped = run_yolo_crop(img, temp_dir)
+                        ocr = run_enhanced_ocr(cropped)
+                        structured = structure_with_gemini(
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            ocr.get("ocr_text", ""),
+                            {},
+                            "",
+                            "manual",
+                            {},
+                        )
+                        out_name = os.path.splitext(os.path.basename(img))[0] + "_output.json"
+                        out_path = os.path.join(output_dir, out_name)
+                        with open(out_path, "w", encoding="utf-8") as f:
+                            json.dump(structured, f, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    print(f"Error processing {file_path}: {e}")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        self.status_label.config(text="Processing complete")
+        messagebox.showinfo("MOHRE", "Manual processing completed")
+
         os.makedirs(TEMP_DIR, exist_ok=True)
         for file_path in paths:
             try:

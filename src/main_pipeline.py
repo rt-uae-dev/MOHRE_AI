@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import platform
 import re
+import tempfile
 from logger import configure_logging, get_logger
 from mohre_ai.email_parser import fetch_and_store_emails
 from mohre_ai.pdf_converter import convert_pdf_to_jpg
@@ -45,7 +46,6 @@ logger = get_logger(__name__)
 # === CONFIG ===
 INPUT_DIR = "data/raw/downloads"
 OUTPUT_DIR = "data/processed/COMPLETED"
-TEMP_DIR = "data/temp"
 LOG_FILE = "logs/process_log.txt"
 
 
@@ -54,7 +54,7 @@ class PipelineContext:
     """Shared configuration for the pipeline."""
     input_dir: str = INPUT_DIR
     output_dir: str = OUTPUT_DIR
-    temp_dir: str = TEMP_DIR
+    temp_dir: str = ""
     log_file: str = LOG_FILE
 
 
@@ -282,16 +282,16 @@ def main() -> None:
         logger.info(f"📁 Processing from: {download_dir}")
         folders_to_process = os.listdir(download_dir)
         logger.info(f"📂 Found {len(folders_to_process)} folders in {download_dir}")
-        
+
         for subject_folder in folders_to_process:
-        print(f"📁 Processing from: {download_dir}")
-        for subject_folder in os.listdir(download_dir):
             if subject_folder in processed_folders:
                 logger.info(f"⏭️ Skipping already processed folder: {subject_folder}")
                 continue
             subject_path = os.path.join(download_dir, subject_folder)
             if not os.path.isdir(subject_path):
                 continue
+            temp_dir = tempfile.mkdtemp(prefix="mohre_pipeline_")
+            context.temp_dir = temp_dir
 
             logger.debug(f"\n🔍 Processing folder: {subject_folder}")
             requested_service = "Unknown Service"
@@ -352,18 +352,18 @@ def main() -> None:
                 file_path = os.path.join(subject_path, filename)
                 if filename.lower().endswith(".pdf"):
                     logger.info(f"📄 Converting: {filename}")
-                    jpg_paths = convert_pdf_to_jpg(file_path, TEMP_DIR)
+                    jpg_paths = convert_pdf_to_jpg(file_path, context.temp_dir)
                     all_image_paths.extend(jpg_paths)
                     print(f"📄 Converting: {filename}")
                     try:
-                        jpg_paths = convert_pdf_to_jpg(file_path, TEMP_DIR)
+                        jpg_paths = convert_pdf_to_jpg(file_path, context.temp_dir)
                         all_image_paths.extend(jpg_paths)
                     except PDF_ERRORS as e:
                         print(f"❌ Failed to convert {filename}: {e}")
                         raise
                 elif filename.lower().endswith((".jpg", ".jpeg", ".png")):
                     # Copy existing images to temp without compression (for best OCR quality)
-                    temp_path = os.path.join(TEMP_DIR, filename)
+                    temp_path = os.path.join(context.temp_dir, filename)
                     shutil.copy2(file_path, temp_path)
                     all_image_paths.append(temp_path)
                     logger.info(f"📷 Copied image: {filename}")
@@ -507,7 +507,7 @@ def main() -> None:
                     input_path = img_data["path"]
 
                     # Run YOLO cropping for all documents
-                    cropped_path = run_yolo_crop(input_path, TEMP_DIR)
+                    cropped_path = run_yolo_crop(input_path, context.temp_dir)
                     if cropped_path:
                         img_data["cropped_path"] = cropped_path
                         logger.info(f"✅ YOLO cropped {img_data['label']}: {os.path.basename(cropped_path)}")
@@ -828,6 +828,8 @@ def main() -> None:
                 sender_email,
                 sender_name,
             )
+
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
             processed_folders.add(subject_folder)
             logger.info(f"📂 Done with folder: {subject_folder}\n{'-'*40}")

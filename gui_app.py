@@ -6,6 +6,7 @@ import sys
 import shutil
 import threading
 import json
+import tempfile
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import logging
@@ -34,8 +35,6 @@ from structure_with_gemini import structure_with_gemini
 
 # Errors that may occur during manual processing
 PROCESSING_ERRORS = PDF_ERRORS + (RuntimeError,)
-
-TEMP_DIR = os.path.join("data", "temp")
 
 configure_logging()
 logger = get_logger(__name__)
@@ -229,6 +228,44 @@ class ManualProcessingWindow(tk.Toplevel):
         Raises:
             RuntimeError: If file processing fails for an individual file.
         """
+        temp_dir = tempfile.mkdtemp(prefix="mohre_manual_")
+        try:
+            for file_path in paths:
+                try:
+                    images: List[str] = []
+                    if file_path.lower().endswith(".pdf"):
+                        images = convert_pdf_to_jpg(file_path, temp_dir)
+                    else:
+                        temp_path = os.path.join(temp_dir, os.path.basename(file_path))
+                        shutil.copy2(file_path, temp_path)
+                        images = [temp_path]
+
+                    for img in images:
+                        cropped = run_yolo_crop(img, temp_dir)
+                        ocr = run_enhanced_ocr(cropped)
+                        structured = structure_with_gemini(
+                            "",
+                            "",
+                            "",
+                            "",
+                            "",
+                            ocr.get("ocr_text", ""),
+                            {},
+                            "",
+                            "manual",
+                            {},
+                        )
+                        out_name = os.path.splitext(os.path.basename(img))[0] + "_output.json"
+                        out_path = os.path.join(output_dir, out_name)
+                        with open(out_path, "w", encoding="utf-8") as f:
+                            json.dump(structured, f, ensure_ascii=False, indent=2)
+                except PROCESSING_ERRORS as e:
+                    messagebox.showerror("Processing Error", f"Failed to process {file_path}: {e}")
+                    raise
+                except Exception as e:
+                    logger.error(f"Error processing {file_path}: {e}")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
         os.makedirs(TEMP_DIR, exist_ok=True)
         for file_path in paths:
             try:
