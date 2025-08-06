@@ -5,15 +5,15 @@ from PIL import Image
 from pdf2image import convert_from_path
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+from config import get_config
 
 # === CONFIG ===
-load_dotenv()
+config = get_config()
 BASE_DIR = Path(__file__).resolve().parents[1]
-MODEL_PATH = os.getenv("MODEL_PATH", "model_classifier.pt")  # Updated model path
+MODEL_PATH = str(config.model_path)  # Updated model path
 IMG_SIZE = 224
-ROOT_DIR = Path(os.getenv("ROOT_DIR", BASE_DIR / "data" / "raw" / "downloads"))
-DATASET_DIR = Path(os.getenv("DATASET_DIR", BASE_DIR / "data" / "dataset"))
+ROOT_DIR = config.root_dir
+DATASET_DIR = config.dataset_dir
 TEMP_JPG_PATH = "temp_passport_page.jpg"
 
 # === Disable DecompressionBombWarning ===

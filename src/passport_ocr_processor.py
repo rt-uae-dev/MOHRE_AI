@@ -1,16 +1,16 @@
 import os
 import io
-from dotenv import load_dotenv
 from google.cloud import vision
 import google.generativeai as genai
 from pathlib import Path
+from config import get_config
 
-# === Step 1: Load environment variables from .env ===
-load_dotenv()
+# === Step 1: Load configuration ===
+config = get_config()
 
 # ✅ Set credentials from environment
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(config.google_application_credentials)
+genai.configure(api_key=config.google_api_key)
 
 # === Step 2: Use Google Vision to extract text from image ===
 def extract_text_with_google_vision(image_path):
@@ -54,9 +54,7 @@ OCR TEXT:
 # === Step 4: Run everything ===
 def main():
     # 🖼️ Image path can be configured via environment variable
-    base_dir = Path(__file__).resolve().parents[1]
-    default_path = base_dir / "data" / "processed" / "COMPLETED" / "passport_1" / "sample_passport.jpg"
-    image_path = os.getenv("PASSPORT_IMAGE_PATH", str(default_path))
+    image_path = str(config.passport_image_path)
 
     print("🔍 Extracting text with Google Vision...")
     ocr_text = extract_text_with_google_vision(image_path)
