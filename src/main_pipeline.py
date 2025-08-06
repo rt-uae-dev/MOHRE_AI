@@ -16,9 +16,17 @@ import shutil
 import subprocess
 import platform
 import re
+from mohre_ai.email_parser import fetch_and_store_emails
+from mohre_ai.pdf_converter import convert_pdf_to_jpg
+from mohre_ai.resnet18_classifier import classify_image_resnet
+from mohre_ai.yolo_crop_ocr_pipeline import run_yolo_crop, run_enhanced_ocr
+from mohre_ai.structure_with_gemini import structure_with_gemini
+from mohre_ai.output_saving_utils import save_outputs, log_processed_file
+from mohre_ai.image_utils import compress_image_to_jpg
+from mohre_ai.google_vision_orientation_detector import rotate_if_needed
+from mohre_ai.parse_salary_docx import parse_salary_docx
 from dataclasses import dataclass
 from typing import List, Dict, Tuple
-
 from email_parser import fetch_and_store_emails
 from pdf_converter import convert_pdf_to_jpg
 from resnet18_classifier import classify_image_resnet
