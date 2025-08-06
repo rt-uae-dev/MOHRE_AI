@@ -55,23 +55,6 @@ def open_file_explorer(directory_path: str):
         print(f"⚠️ Could not open file explorer: {e}")
         print(f"📂 Please manually navigate to: {os.path.abspath(directory_path)}")
 
-def convert_pdf_to_jpg(pdf_path, temp_dir):
-    """Convert PDF to JPG images"""
-    try:
-        from pdf2image import convert_from_path
-        images = convert_from_path(pdf_path)
-        image_paths = []
-        
-        for i, image in enumerate(images):
-            jpg_path = os.path.join(temp_dir, f"{os.path.splitext(os.path.basename(pdf_path))[0]}_page{i+1}.jpg")
-            image.save(jpg_path, "JPEG")
-            image_paths.append(jpg_path)
-            
-        return image_paths
-    except Exception as e:
-        print(f"❌ Error converting PDF {pdf_path}: {e}")
-        return []
-
 def main():
     # === STEP 1: Fetch emails ===
     print("📧 Fetching emails...")
