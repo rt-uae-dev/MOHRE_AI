@@ -9,8 +9,13 @@ from PIL import Image
 import google.generativeai as genai
 from pathlib import Path
 from dotenv import load_dotenv
+import logging
+from logger import configure_logging, get_logger
 
 load_dotenv()
+
+configure_logging()
+logger = get_logger(__name__)
 
 # Configure Google Gemini API
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -34,10 +39,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # === Dynamically determine number of classes ===
 if os.path.exists(DATASET_DIR):
     ORIGINAL_CLASSES = len([d for d in os.listdir(DATASET_DIR) if os.path.isdir(os.path.join(DATASET_DIR, d))])
-    print(f"🔍 Dynamically determined {ORIGINAL_CLASSES} classes from dataset")
+    logger.debug(f"🔍 Dynamically determined {ORIGINAL_CLASSES} classes from dataset")
 else:
     ORIGINAL_CLASSES = 23  # Fallback to 23 classes if dataset directory doesn't exist
-    print(f"⚠️ Using fallback: {ORIGINAL_CLASSES} classes")
+    logger.warning(f"⚠️ Using fallback: {ORIGINAL_CLASSES} classes")
 
 model = models.resnet18()
 model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
@@ -46,28 +51,28 @@ model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
 model_loaded_successfully = False
 try:
     model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
-    print(f"✅ Model loaded successfully with {ORIGINAL_CLASSES} classes")
+    logger.info(f"✅ Model loaded successfully with {ORIGINAL_CLASSES} classes")
     model_loaded_successfully = True
 except RuntimeError as e:
     if "size mismatch" in str(e):
-        print(f"⚠️ Model size mismatch. Expected {ORIGINAL_CLASSES} classes but model has different size.")
-        print("🔄 Creating new model with correct size...")
+        logger.warning(f"⚠️ Model size mismatch. Expected {ORIGINAL_CLASSES} classes but model has different size.")
+        logger.info("🔄 Creating new model with correct size...")
         # Create a new model with the correct number of classes
         model = models.resnet18()
         model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
-        print(f"✅ Created new model with {ORIGINAL_CLASSES} classes")
-        print("⚠️ WARNING: This is an untrained model and will make random predictions!")
-        print("🔄 Will use Gemini Vision as fallback for classification")
+        logger.info(f"✅ Created new model with {ORIGINAL_CLASSES} classes")
+        logger.warning("⚠️ WARNING: This is an untrained model and will make random predictions!")
+        logger.info("🔄 Will use Gemini Vision as fallback for classification")
     else:
         raise e
 except FileNotFoundError:
-    print(f"⚠️ Model file not found: {MODEL_PATH}")
-    print("🔄 Creating new model with correct size...")
+    logger.warning(f"⚠️ Model file not found: {MODEL_PATH}")
+    logger.info("🔄 Creating new model with correct size...")
     model = models.resnet18()
     model.fc = torch.nn.Linear(model.fc.in_features, ORIGINAL_CLASSES)
-    print(f"✅ Created new model with {ORIGINAL_CLASSES} classes")
-    print("⚠️ WARNING: This is an untrained model and will make random predictions!")
-    print("🔄 Will use Gemini Vision as fallback for classification")
+    logger.info(f"✅ Created new model with {ORIGINAL_CLASSES} classes")
+    logger.warning("⚠️ WARNING: This is an untrained model and will make random predictions!")
+    logger.info("🔄 Will use Gemini Vision as fallback for classification")
 
 model.to(device)
 model.eval()
@@ -83,13 +88,13 @@ transform = transforms.Compose([
 def classify_image_resnet(image_path: str) -> str:
     # If model wasn't loaded successfully, use Gemini Vision as fallback
     if not model_loaded_successfully:
-        print(f"🔄 Using Gemini Vision fallback for {os.path.basename(image_path)} (ResNet model not trained)")
+        logger.info(f"🔄 Using Gemini Vision fallback for {os.path.basename(image_path)} (ResNet model not trained)")
         return classify_image_with_gemini_vision(image_path)
     
     try:
         image = Image.open(image_path).convert("RGB")
     except Exception as e:
-        print(f"⚠️ Failed to load image: {image_path} - {e}")
+        logger.warning(f"⚠️ Failed to load image: {image_path} - {e}")
         return "unknown"
 
     image_tensor = transform(image).unsqueeze(0).to(device)
@@ -119,21 +124,21 @@ def classify_image_resnet(image_path: str) -> str:
         
         # Only show detailed output if confidence is low
         if confidence_value < 0.4:
-            print(f"🔍 Classification for {os.path.basename(image_path)}:")
-            print(f"   Predicted (original): {predicted_original_class}")
-            print(f"   Confidence: {confidence_value:.3f}")
+            logger.debug(f"🔍 Classification for {os.path.basename(image_path)}:")
+            logger.info(f"   Predicted (original): {predicted_original_class}")
+            logger.info(f"   Confidence: {confidence_value:.3f}")
             
             # Show top 3 predictions
             top3_conf, top3_indices = torch.topk(probabilities, 3, dim=1)
-            print(f"   Top 3 predictions:")
+            logger.info(f"   Top 3 predictions:")
             for i in range(3):
                 class_name = original_class_names[top3_indices[0][i].item()]
                 conf = top3_conf[0][i].item()
-                print(f"     {i+1}. {class_name}: {conf:.3f}")
+                logger.info(f"     {i+1}. {class_name}: {conf:.3f}")
         
         # If confidence is too low, use Gemini Vision as fallback
         if confidence_value < 0.4:
-            print(f"⚠️ Low confidence ({confidence_value:.3f}), using Gemini Vision fallback")
+            logger.warning(f"⚠️ Low confidence ({confidence_value:.3f}), using Gemini Vision fallback")
             return classify_image_with_gemini_vision(image_path)
         
         return predicted_original_class
@@ -144,7 +149,7 @@ def classify_image_from_text(ocr_text: str) -> str:
     Classify image based on OCR text using Gemini (text-only, not vision).
     """
     if not ocr_text.strip():
-        print("⚠️ Skipping Gemini — OCR text is empty.")
+        logger.warning("⚠️ Skipping Gemini — OCR text is empty.")
         return "unknown"
 
     prompt = (
@@ -160,13 +165,13 @@ def classify_image_from_text(ocr_text: str) -> str:
         response = model.generate_content(prompt)
         label = response.text.strip().lower()
         if label in CLASS_NAMES:
-            print(f"✅ Gemini fallback classified as: {label}")
+            logger.info(f"✅ Gemini fallback classified as: {label}")
             return label
         else:
-            print(f"⚠️ Gemini returned unknown class: {label}")
+            logger.warning(f"⚠️ Gemini returned unknown class: {label}")
             return "unknown"
     except Exception as e:
-        print(f"❌ Gemini classification failed: {e}")
+        logger.error(f"❌ Gemini classification failed: {e}")
         return "unknown"
 
 
@@ -201,14 +206,14 @@ def classify_image_with_gemini_vision(image_path: str) -> str:
         label = response.text.strip().lower()
         
         if label in CLASS_NAMES:
-            print(f"✅ Gemini Vision classified as: {label}")
+            logger.info(f"✅ Gemini Vision classified as: {label}")
             return label
         else:
-            print(f"⚠️ Gemini Vision returned unknown class: {label}")
+            logger.warning(f"⚠️ Gemini Vision returned unknown class: {label}")
             return "unknown"
             
     except Exception as e:
-        print(f"❌ Gemini Vision classification failed: {e}")
+        logger.error(f"❌ Gemini Vision classification failed: {e}")
         return "unknown"
 
 
@@ -273,14 +278,14 @@ def check_image_orientation(image_path: str) -> dict:
             # Determine if orientation is correct based on rotation needed
             analysis["orientation_correct"] = (analysis.get("rotation_needed", 0) == 0)
             
-            print(f"✅ Orientation analysis completed for {os.path.basename(image_path)}")
-            print(f"   Rotation needed: {analysis.get('rotation_needed', 0)}°")
-            print(f"   Description: {analysis.get('rotation_description', 'Unknown')}")
+            logger.info(f"✅ Orientation analysis completed for {os.path.basename(image_path)}")
+            logger.info(f"   Rotation needed: {analysis.get('rotation_needed', 0)}°")
+            logger.info(f"   Description: {analysis.get('rotation_description', 'Unknown')}")
             return analysis
             
         except json.JSONDecodeError:
             # Fallback analysis based on image properties
-            print(f"⚠️ Could not parse Gemini response, using fallback analysis")
+            logger.warning(f"⚠️ Could not parse Gemini response, using fallback analysis")
             return {
                 "document_type": "unknown",
                 "current_orientation": "unknown",
@@ -295,7 +300,7 @@ def check_image_orientation(image_path: str) -> dict:
             }
             
     except Exception as e:
-        print(f"❌ Orientation check failed: {e}")
+        logger.error(f"❌ Orientation check failed: {e}")
         return {
             "document_type": "unknown",
             "current_orientation": "unknown",
@@ -322,7 +327,7 @@ def auto_rotate_image_if_needed(image_path: str, analysis: dict = None) -> str:
         rotation_needed = analysis.get("rotation_needed", 0)
         
         if rotation_needed == 0:
-            print(f"✅ Image orientation is correct, no rotation needed")
+            logger.info(f"✅ Image orientation is correct, no rotation needed")
             return image_path
         
         # Load image
@@ -336,11 +341,11 @@ def auto_rotate_image_if_needed(image_path: str, analysis: dict = None) -> str:
         rotated_path = f"{base_name}_rotated_{rotation_needed}deg.jpg"
         rotated_image.save(rotated_path, "JPEG", quality=95)
         
-        print(f"✅ Image rotated {rotation_needed}° and saved as: {rotated_path}")
+        logger.info(f"✅ Image rotated {rotation_needed}° and saved as: {rotated_path}")
         return rotated_path
         
     except Exception as e:
-        print(f"❌ Auto-rotation failed: {e}")
+        logger.error(f"❌ Auto-rotation failed: {e}")
         return image_path
 
 
@@ -419,11 +424,11 @@ def extract_attestation_numbers_with_gemini_vision(image_path: str) -> dict:
         else:
             analysis = content
             
-        print(f"✅ Gemini Vision attestation extraction completed for {os.path.basename(image_path)}")
+        logger.info(f"✅ Gemini Vision attestation extraction completed for {os.path.basename(image_path)}")
         return analysis
         
     except Exception as e:
-        print(f"❌ Gemini Vision attestation extraction failed: {e}")
+        logger.error(f"❌ Gemini Vision attestation extraction failed: {e}")
         return {
             "attestation_number_1": None,
             "attestation_number_2": None,
@@ -536,11 +541,11 @@ def extract_document_data_with_gemini_vision(image_path: str) -> dict:
         else:
             analysis = content
             
-        print(f"✅ Gemini Vision comprehensive extraction completed for {os.path.basename(image_path)}")
+        logger.info(f"✅ Gemini Vision comprehensive extraction completed for {os.path.basename(image_path)}")
         return analysis
         
     except Exception as e:
-        print(f"❌ Gemini Vision comprehensive extraction failed: {e}")
+        logger.error(f"❌ Gemini Vision comprehensive extraction failed: {e}")
         return {
             "attestation_numbers": {
                 "primary": None,

@@ -8,6 +8,9 @@ import threading
 import json
 import tkinter as tk
 from tkinter import filedialog, messagebox
+import logging
+
+from logger import configure_logging, get_logger
 
 # Optional drag and drop support
 try:
@@ -27,6 +30,8 @@ from structure_with_gemini import structure_with_gemini
 
 TEMP_DIR = os.path.join("data", "temp")
 
+configure_logging()
+logger = get_logger(__name__)
 
 def run_gui():
     """Launch the main GUI window."""
@@ -155,7 +160,7 @@ class ManualProcessingWindow(tk.Toplevel):
                     with open(out_path, "w", encoding="utf-8") as f:
                         json.dump(structured, f, ensure_ascii=False, indent=2)
             except Exception as e:
-                print(f"Error processing {file_path}: {e}")
+                logger.error(f"Error processing {file_path}: {e}")
         self.status_label.config(text="Processing complete")
         messagebox.showinfo("MOHRE", "Manual processing completed")
 
