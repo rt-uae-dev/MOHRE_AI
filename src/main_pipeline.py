@@ -321,14 +321,180 @@ def main() -> None:
                 except Exception as e:
                     print(f"❌ Error parsing salary from {docx_file}: {e}")
 
+            # === STEP 2.4: Classify all images with ResNet ===
+            print("🏷️ Classifying images with ResNet...")
+            classified_images = []
+            for img_path in all_image_paths:
+                try:
+                    resnet_label = classify_image_resnet(img_path)
+                    classified_images.append({
+                        "path": img_path,
+                        "label": resnet_label,
+                        "filename": os.path.basename(img_path)
+                    })
+                    print(f"✅ {os.path.basename(img_path)} → {resnet_label}")
+                except Exception as e:
+                    print(f"❌ Error classifying {os.path.basename(img_path)}: {e}")
+
+            # === STEP 2.5: Ensure certificate + attestation pairing ===
+            has_certificate = any(img["label"] == "certificate" for img in classified_images)
+            has_attestation = any(img["label"] in ["certificate_attestation", "attestation_label"] for img in classified_images)
+            
+            if has_certificate and not has_attestation:
+                print("⚠️ Certificate found but no attestation page. Looking for misclassified attestation...")
+                for img_data in classified_images:
+                    if img_data["label"] in ["emirates_id", "emirates_id_2", "unknown"]:
+                        # Reclassify as attestation_label for further processing
+                        img_data["label"] = "attestation_label"
+                        print(f"🔄 Reclassified {img_data['filename']} as attestation_label")
+
+            # === STEP 2.6: Rotate images if needed using Gemini 2.5 Flash (only specific document types) ===
+            print("🔄 Using Gemini 2.5 Flash to check and rotate images if needed...")
+            
+            # Only check rotation for specific document types after classification
+            rotation_check_types = ["passport_1", "passport_2", "personal_photo", "certificate"]
+            
+            for img_data in classified_images:
+                try:
+                    # Only check rotation for specific document types
+                    if img_data["label"] in rotation_check_types:
+                        print(f"🔍 Checking rotation for {img_data['filename']} ({img_data['label']})...")
+                        rotated_path = rotate_if_needed(img_data["path"])
+                        if rotated_path != img_data["path"]:
+                            img_data["path"] = rotated_path
+                            print(f"✅ Gemini 2.5 Flash rotated {img_data['filename']} ({img_data['label']})")
+                        else:
+                            print(f"✅ No rotation needed for {img_data['filename']} ({img_data['label']})")
+                    else:
+                        print(f"⏭️ Skipping rotation check for {img_data['filename']} ({img_data['label']}) - not in rotation check list")
+                except Exception as e:
+                    print(f"⚠️ Error rotating {img_data['filename']}: {e}")
+
+            # === STEP 2.7: If ResNet detects attestation page, keep original for downstream processing ===
+            print("📋 Checking for attestation pages detected by ResNet...")
+            attestation_images = [img for img in classified_images if img["label"] in ["certificate_attestation", "attestation_label"]]
+
+            for attestation_img in attestation_images:
+                try:
+                    # Use the original, uncompressed page for all downstream processing
+                    attestation_img["full_page_path"] = attestation_img["path"]
+                    print(f"ℹ️ Using uncompressed attestation page: {os.path.basename(attestation_img['path'])}")
+                except Exception as e:
+                    print(f"❌ Error processing attestation {attestation_img['filename']}: {e}")
+
+            # === STEP 2.8: Run YOLO cropping for all documents ===
+            print("✂️ Running YOLO cropping for all documents...")
+            for img_data in classified_images:
+                try:
+                    # Use the current image path (some may be uncompressed)
+                    input_path = img_data["path"]
+
+                    # Run YOLO cropping for all documents
+                    cropped_path = run_yolo_crop(input_path, TEMP_DIR)
+                    if cropped_path:
+                        img_data["cropped_path"] = cropped_path
+                        print(f"✅ YOLO cropped {img_data['label']}: {os.path.basename(cropped_path)}")
+                    else:
+                        print(f"⚠️ YOLO could not crop {img_data['filename']} - using full page")
+
+                except Exception as e:
+                    print(f"❌ Error cropping {img_data['filename']}: {e}")
+
+            # === STEP 2.9: Run OCR for all documents with attestation fallback ===
+            print("📝 Running OCR for all documents...")
+            processed_images = []
+
+            for img_data in classified_images:
+                try:
+                    # Use cropped path if available, otherwise fall back to the full page
+                    ocr_path = img_data.get("cropped_path") or img_data.get("full_page_path") or img_data["path"]
+
+                    if img_data["label"] in ["certificate_attestation", "attestation_label"]:
+                        if "cropped_path" in img_data:
+                            print(f"🔍 Running OCR on attestation label: {img_data['filename']}")
+                        else:
+                            print(f"⚠️ YOLO failed to crop label for {img_data['filename']} - using full page for OCR")
+
+                    # Run OCR
+                    vision_data = run_enhanced_ocr(ocr_path)
+                    img_data["ocr_text"] = vision_data.get("ocr_text", "")
+                    img_data["extracted_fields"] = vision_data.get("extracted_fields", {})
+                    img_data["document_type"] = vision_data.get("document_type", "unknown")
+                    img_data["confidence"] = vision_data.get("confidence", 0.0)
+
+                    processed_images.append(img_data)
+                    print(f"✅ OCR completed: {img_data['filename']} ({img_data['label']})")
+
+                except Exception as e:
+                    print(f"❌ Error processing {img_data['filename']}: {e}")
+
+
             classified_images = classify_images(context, image_paths)
             processed_images = perform_ocr(context, classified_images)
             if not processed_images:
                 print(f"⚠️ No processed images for {subject_folder}. Skipping folder.")
                 continue
 
+            # === STEP 3: Comprehensive Gemini structuring ===
+            print(f"🧠 Running comprehensive Gemini structuring for {subject_folder}...")
+            
+            # Collect OCR data by document type
+            passport_ocr_1 = ""
+            passport_ocr_2 = ""
+            emirates_id_ocr = ""
+            emirates_id_2_ocr = ""
+            employee_info = ""
+            certificate_ocr = ""
+            google_metadata = {}
+            
+            for img_data in processed_images:
+                ocr_text = img_data.get("ocr_text", "")
+                extracted_fields = img_data.get("extracted_fields", {})
+                
+                if img_data["label"] == "passport_1":
+                    passport_ocr_1 = ocr_text
+                    if extracted_fields:
+                        google_metadata["passport_1_fields"] = extracted_fields
+                elif img_data["label"] == "passport_2":
+                    passport_ocr_2 = ocr_text
+                    if extracted_fields:
+                        google_metadata["passport_2_fields"] = extracted_fields
+                elif img_data["label"] == "emirates_id":
+                    emirates_id_ocr = ocr_text
+                    if extracted_fields:
+                        google_metadata["emirates_id_fields"] = extracted_fields
+                elif img_data["label"] == "emirates_id_2":
+                    emirates_id_2_ocr = ocr_text
+                    if extracted_fields:
+                        google_metadata["emirates_id_2_fields"] = extracted_fields
+                elif img_data["label"] == "employee_info_form":
+                    employee_info = ocr_text
+                    if extracted_fields:
+                        google_metadata["employee_info_fields"] = extracted_fields
+                elif img_data["label"] == "certificate":
+                    certificate_ocr = ocr_text
+                    if extracted_fields:
+                        google_metadata["certificate_fields"] = extracted_fields
+                elif img_data["label"] in ["certificate_attestation", "attestation_label"] and ocr_text:
+                    certificate_ocr = ocr_text
+                    if extracted_fields:
+                        google_metadata["certificate_fields"] = extracted_fields
+
+            result = structure_with_gemini(
+                passport_ocr_1=passport_ocr_1,
+                passport_ocr_2=passport_ocr_2,
+                emirates_id_ocr=emirates_id_ocr,
+                emirates_id_2_ocr=emirates_id_2_ocr,
+                employee_info=employee_info,
+                certificate_ocr=certificate_ocr,
+                salary_data=salary_data,  # Use the parsed salary data
+                email_text=email_text,
+                resnet_label=", ".join([img["label"] for img in processed_images]),
+                google_metadata=google_metadata
+
             final_structured, gemini_response = gemini_structuring(
                 context, processed_images, salary_data, email_text, requested_service, service_needed
+
             )
 
             save_results(
