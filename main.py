@@ -21,14 +21,7 @@ else:
 # Add src directory to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
-from main_pipeline import main
+from gui_app import run_gui
 
 if __name__ == "__main__":
-    from datetime import datetime
-    import time
-
-    while True:
-        print(f"\n🔄 Starting processing cycle at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        main()
-        print("⏳ Sleeping for 5 minutes before next cycle...\n")
-        time.sleep(5 * 60)
+    run_gui()
