@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import List, Dict, Tuple
 from email_parser import fetch_and_store_emails
 from pdf_converter import convert_pdf_to_jpg
-from resnet18_classifier import classify_image_resnet
+from resnet18_classifier import classify_image_resnet, load_resnet_model
 from yolo_crop_ocr_pipeline import run_yolo_crop, run_enhanced_ocr
 from structure_with_gemini import structure_with_gemini
 from output_saving_utils import save_outputs, log_processed_file
@@ -66,6 +66,9 @@ def open_file_explorer(directory_path: str) -> None:
         print(f"📂 Please manually navigate to: {os.path.abspath(directory_path)}")
 
 
+def main():
+    load_resnet_model()
+    # === STEP 1: Fetch emails ===
 def fetch_emails(context: PipelineContext) -> None:
     print("📧 Fetching emails...")
     fetch_and_store_emails()
