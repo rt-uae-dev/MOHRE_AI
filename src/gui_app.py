@@ -8,6 +8,7 @@ import json
 import tempfile
 import tkinter as tk
 from tkinter import filedialog, messagebox
+import queue
 
 # Optional drag and drop support
 try:
@@ -55,6 +56,7 @@ class ManualProcessingWindow(tk.Toplevel):
         self.title("Manual Processing")
         self.geometry("500x400")
         self.file_paths = []
+        self._queue: "queue.Queue[tuple[str, str]]" = queue.Queue()
 
         self.file_area = tk.Frame(self, relief=tk.SUNKEN, borderwidth=1)
         self.file_area.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -74,6 +76,8 @@ class ManualProcessingWindow(tk.Toplevel):
 
         self.status_label = tk.Label(self, text="")
         self.status_label.pack(pady=5)
+
+        self.after(100, self._process_queue)
 
     def _browse_files(self):
         paths = filedialog.askopenfilenames(
@@ -117,6 +121,17 @@ class ManualProcessingWindow(tk.Toplevel):
         ).start()
         self.status_label.config(text="Processing...")
 
+    def _process_queue(self):
+        while not self._queue.empty():
+            msg_type, msg = self._queue.get()
+            if msg_type == "status":
+                self.status_label.config(text=msg)
+            elif msg_type == "error":
+                messagebox.showerror("Processing Error", msg)
+            elif msg_type == "info":
+                messagebox.showinfo("MOHRE", msg)
+        self.after(100, self._process_queue)
+
     def _process_files(self, paths, output_dir):
         temp_dir = tempfile.mkdtemp(prefix="mohre_manual_")
         try:
@@ -155,6 +170,41 @@ class ManualProcessingWindow(tk.Toplevel):
             shutil.rmtree(temp_dir, ignore_errors=True)
         self.status_label.config(text="Processing complete")
         messagebox.showinfo("MOHRE", "Manual processing completed")
+
+        os.makedirs(TEMP_DIR, exist_ok=True)
+        for file_path in paths:
+            try:
+                images = []
+                if file_path.lower().endswith(".pdf"):
+                    images = convert_pdf_to_jpg(file_path, TEMP_DIR)
+                else:
+                    temp_path = os.path.join(TEMP_DIR, os.path.basename(file_path))
+                    shutil.copy2(file_path, temp_path)
+                    images = [temp_path]
+
+                for img in images:
+                    cropped = run_yolo_crop(img, TEMP_DIR)
+                    ocr = run_enhanced_ocr(cropped)
+                    structured = structure_with_gemini(
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        ocr.get("ocr_text", ""),
+                        {},
+                        "",
+                        "manual",
+                        {},
+                    )
+                    out_name = os.path.splitext(os.path.basename(img))[0] + "_output.json"
+                    out_path = os.path.join(output_dir, out_name)
+                    with open(out_path, "w", encoding="utf-8") as f:
+                        json.dump(structured, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                self._queue.put(("error", f"Error processing {file_path}: {e}"))
+        self._queue.put(("status", "Processing complete"))
+        self._queue.put(("info", "Manual processing completed"))
 
 
 if __name__ == "__main__":  # pragma: no cover

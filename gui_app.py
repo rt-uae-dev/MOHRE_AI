@@ -10,6 +10,7 @@ import tempfile
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import logging
+import queue
 
 # Ensure src directory is in path when running standalone
 SRC_DIR = os.path.join(os.path.dirname(__file__), "src")
@@ -89,6 +90,7 @@ class ManualProcessingWindow(tk.Toplevel):
         self.title("Manual Processing")
         self.geometry("500x400")
         self.file_paths: List[str] = []
+        self._queue: "queue.Queue[tuple[str, str]]" = queue.Queue()
 
         self.file_area: tk.Frame = tk.Frame(self, relief=tk.SUNKEN, borderwidth=1)
         self.file_area.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -108,6 +110,9 @@ class ManualProcessingWindow(tk.Toplevel):
 
         self.status_label: tk.Label = tk.Label(self, text="")
         self.status_label.pack(pady=5)
+
+        # Periodically process messages from worker threads
+        self.after(100, self._process_queue)
 
     def _browse_files(self) -> None:
         """Open a file dialog for the user to select files.
@@ -198,6 +203,18 @@ class ManualProcessingWindow(tk.Toplevel):
         ).start()
         self.status_label.config(text="Processing...")
 
+    def _process_queue(self) -> None:
+        """Handle messages from the worker thread."""
+        while not self._queue.empty():
+            msg_type, msg = self._queue.get()
+            if msg_type == "status":
+                self.status_label.config(text=msg)
+            elif msg_type == "error":
+                messagebox.showerror("Processing Error", msg)
+            elif msg_type == "info":
+                messagebox.showinfo("MOHRE", msg)
+        self.after(100, self._process_queue)
+
     def _process_files(self, paths: Iterable[str], output_dir: str) -> None:
         """Process the provided files and save structured output.
 
@@ -249,9 +266,44 @@ class ManualProcessingWindow(tk.Toplevel):
                     logger.error(f"Error processing {file_path}: {e}")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
+        os.makedirs(TEMP_DIR, exist_ok=True)
+        for file_path in paths:
+            try:
+                images: List[str] = []
+                if file_path.lower().endswith(".pdf"):
+                    images = convert_pdf_to_jpg(file_path, TEMP_DIR)
+                else:
+                    temp_path = os.path.join(TEMP_DIR, os.path.basename(file_path))
+                    shutil.copy2(file_path, temp_path)
+                    images = [temp_path]
 
-        self.status_label.config(text="Processing complete")
-        messagebox.showinfo("MOHRE", "Manual processing completed")
+                for img in images:
+                    cropped = run_yolo_crop(img, TEMP_DIR)
+                    ocr = run_enhanced_ocr(cropped)
+                    structured = structure_with_gemini(
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        ocr.get("ocr_text", ""),
+                        {},
+                        "",
+                        "manual",
+                        {},
+                    )
+                    out_name = os.path.splitext(os.path.basename(img))[0] + "_output.json"
+                    out_path = os.path.join(output_dir, out_name)
+                    with open(out_path, "w", encoding="utf-8") as f:
+                        json.dump(structured, f, ensure_ascii=False, indent=2)
+            except PROCESSING_ERRORS as e:
+                logger.error(f"Failed to process {file_path}: {e}")
+                self._queue.put(("error", f"Failed to process {file_path}: {e}"))
+            except Exception as e:  # pragma: no cover - runtime safeguard
+                logger.error(f"Error processing {file_path}: {e}")
+
+        self._queue.put(("status", "Processing complete"))
+        self._queue.put(("info", "Manual processing completed"))
 
 
 if __name__ == "__main__":  # pragma: no cover
