@@ -235,29 +235,38 @@ def main():
                 except Exception as e:
                     print(f"❌ Error processing attestation {attestation_img['filename']}: {e}")
 
-            # === STEP 2.8: Run YOLO cropping for ALL documents ===
-            print("✂️ Running YOLO cropping for ALL documents...")
+            # === STEP 2.8: Run YOLO cropping for all documents ===
+            print("✂️ Running YOLO cropping for all documents...")
             for img_data in classified_images:
                 try:
                     # Use the current image path (some may be uncompressed)
                     input_path = img_data["path"]
-                    
-                    # Run YOLO cropping for ALL documents
+
+                    # Run YOLO cropping for all documents
                     cropped_path = run_yolo_crop(input_path, TEMP_DIR)
-                    img_data["cropped_path"] = cropped_path
-                    print(f"✅ YOLO cropped {img_data['label']}: {os.path.basename(cropped_path)}")
-                    
+                    if cropped_path:
+                        img_data["cropped_path"] = cropped_path
+                        print(f"✅ YOLO cropped {img_data['label']}: {os.path.basename(cropped_path)}")
+                    else:
+                        print(f"⚠️ YOLO could not crop {img_data['filename']} - using full page")
+
                 except Exception as e:
                     print(f"❌ Error cropping {img_data['filename']}: {e}")
 
-            # === STEP 2.9: Run OCR for all documents using cropped versions ===
-            print("📝 Running OCR for all documents using cropped versions...")
+            # === STEP 2.9: Run OCR for all documents with attestation fallback ===
+            print("📝 Running OCR for all documents...")
             processed_images = []
-            
+
             for img_data in classified_images:
                 try:
-                    # Use cropped path for OCR (all documents)
-                    ocr_path = img_data["cropped_path"]
+                    # Use cropped path if available, otherwise fall back to the full page
+                    ocr_path = img_data.get("cropped_path") or img_data.get("full_page_path") or img_data["path"]
+
+                    if img_data["label"] in ["certificate_attestation", "attestation_label"]:
+                        if "cropped_path" in img_data:
+                            print(f"🔍 Running OCR on attestation label: {img_data['filename']}")
+                        else:
+                            print(f"⚠️ YOLO failed to crop label for {img_data['filename']} - using full page for OCR")
 
                     # Run OCR
                     vision_data = run_enhanced_ocr(ocr_path)
@@ -265,10 +274,10 @@ def main():
                     img_data["extracted_fields"] = vision_data.get("extracted_fields", {})
                     img_data["document_type"] = vision_data.get("document_type", "unknown")
                     img_data["confidence"] = vision_data.get("confidence", 0.0)
-                    
+
                     processed_images.append(img_data)
                     print(f"✅ OCR completed: {img_data['filename']} ({img_data['label']})")
-                    
+
                 except Exception as e:
                     print(f"❌ Error processing {img_data['filename']}: {e}")
 
@@ -314,7 +323,11 @@ def main():
                     employee_info = ocr_text
                     if extracted_fields:
                         google_metadata["employee_info_fields"] = extracted_fields
-                elif img_data["label"] in ["certificate", "certificate_attestation", "attestation_label"]:
+                elif img_data["label"] == "certificate":
+                    certificate_ocr = ocr_text
+                    if extracted_fields:
+                        google_metadata["certificate_fields"] = extracted_fields
+                elif img_data["label"] in ["certificate_attestation", "attestation_label"] and ocr_text:
                     certificate_ocr = ocr_text
                     if extracted_fields:
                         google_metadata["certificate_fields"] = extracted_fields
