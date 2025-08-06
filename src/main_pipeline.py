@@ -28,6 +28,8 @@ from mohre_ai.parse_salary_docx import parse_salary_docx
 from dataclasses import dataclass
 from typing import List, Dict, Tuple
 from email_parser import fetch_and_store_emails
+from pdf_converter import convert_pdf_to_jpg, PDF_ERRORS
+from resnet18_classifier import classify_image_resnet
 from pdf_converter import convert_pdf_to_jpg
 from resnet18_classifier import classify_image_resnet, load_resnet_model
 from yolo_crop_ocr_pipeline import run_yolo_crop, run_enhanced_ocr
@@ -60,10 +62,11 @@ def open_file_explorer(directory_path: str) -> None:
             subprocess.run(["open", directory_path], check=True)
         else:
             subprocess.run(["xdg-open", directory_path], check=True)
+
         print(f"📂 Opened file explorer to: {directory_path}")
-    except Exception as e:
+    except (FileNotFoundError, subprocess.CalledProcessError, OSError) as e:
         print(f"⚠️ Could not open file explorer: {e}")
-        print(f"📂 Please manually navigate to: {os.path.abspath(directory_path)}")
+        raise
 
 
 def main():
@@ -300,6 +303,40 @@ def main() -> None:
                     if name_parts and all(part.isalpha() for part in name_parts):
                         sender_name = " ".join(part.capitalize() for part in name_parts)
                 try:
+                    from service_detector import detect_service_from_email, RequestException
+                except ImportError as e:
+                    requested_service = "Unknown Service"
+                    print(f"⚠️ Service detection unavailable: {e}")
+                else:
+                    try:
+                        requested_service = detect_service_from_email(email_text)
+                        print(f"🛠️ Detected service request: {requested_service}")
+                    except RequestException as e:
+                        requested_service = "Unknown Service"
+                        print(f"⚠️ Service detection failed: {e}")
+            
+            # === STEP 2.2: Convert PDFs to JPGs ===
+            print("🔄 Converting PDFs to JPGs...")
+            all_image_paths = []
+            for filename in os.listdir(subject_path):
+                file_path = os.path.join(subject_path, filename)
+                if filename.lower().endswith(".pdf"):
+                    print(f"📄 Converting: {filename}")
+                    try:
+                        jpg_paths = convert_pdf_to_jpg(file_path, TEMP_DIR)
+                        all_image_paths.extend(jpg_paths)
+                    except PDF_ERRORS as e:
+                        print(f"❌ Failed to convert {filename}: {e}")
+                        raise
+                elif filename.lower().endswith((".jpg", ".jpeg", ".png")):
+                    # Copy existing images to temp without compression (for best OCR quality)
+                    temp_path = os.path.join(TEMP_DIR, filename)
+                    shutil.copy2(file_path, temp_path)
+                    all_image_paths.append(temp_path)
+                    print(f"📷 Copied image: {filename}")
+
+            if not all_image_paths:
+
                     from service_detector import detect_service_from_email
                     requested_service = detect_service_from_email(email_text)
                 except Exception:
@@ -318,8 +355,26 @@ def main() -> None:
                     parsed_salary = parse_salary_docx(docx_path)
                     if parsed_salary:
                         salary_data.update(parsed_salary)
+
+                        print(f"✅ Parsed salary from: {docx_file}")
+
+                        # Display salary breakdown
+                        print("💰 Salary Breakdown:")
+                        for key, value in parsed_salary.items():
+                            if key == "Employment_Terms":
+                                print(f"   📋 Employment Terms:")
+                                for term_key, term_value in value.items():
+                                    print(f"      • {term_key.replace('_', ' ').title()}: {term_value}")
+                            else:
+                                print(f"   • {key.replace('_', ' ').title()}: {value}")
+                    else:
+                        print(f"⚠️ No salary data found in: {docx_file}")
+                except (OSError, ValueError) as e:
+
                 except Exception as e:
+
                     print(f"❌ Error parsing salary from {docx_file}: {e}")
+                    raise
 
             # === STEP 2.4: Classify all images with ResNet ===
             print("🏷️ Classifying images with ResNet...")
@@ -333,8 +388,9 @@ def main() -> None:
                         "filename": os.path.basename(img_path)
                     })
                     print(f"✅ {os.path.basename(img_path)} → {resnet_label}")
-                except Exception as e:
+                except (OSError, RuntimeError) as e:
                     print(f"❌ Error classifying {os.path.basename(img_path)}: {e}")
+                    raise
 
             # === STEP 2.5: Ensure certificate + attestation pairing ===
             has_certificate = any(img["label"] == "certificate" for img in classified_images)
@@ -367,8 +423,9 @@ def main() -> None:
                             print(f"✅ No rotation needed for {img_data['filename']} ({img_data['label']})")
                     else:
                         print(f"⏭️ Skipping rotation check for {img_data['filename']} ({img_data['label']}) - not in rotation check list")
-                except Exception as e:
+                except (OSError, RuntimeError) as e:
                     print(f"⚠️ Error rotating {img_data['filename']}: {e}")
+                    raise
 
             # === STEP 2.7: If ResNet detects attestation page, keep original for downstream processing ===
             print("📋 Checking for attestation pages detected by ResNet...")
@@ -379,8 +436,9 @@ def main() -> None:
                     # Use the original, uncompressed page for all downstream processing
                     attestation_img["full_page_path"] = attestation_img["path"]
                     print(f"ℹ️ Using uncompressed attestation page: {os.path.basename(attestation_img['path'])}")
-                except Exception as e:
+                except (OSError, KeyError) as e:
                     print(f"❌ Error processing attestation {attestation_img['filename']}: {e}")
+                    raise
 
             # === STEP 2.8: Run YOLO cropping for all documents ===
             print("✂️ Running YOLO cropping for all documents...")
@@ -397,8 +455,9 @@ def main() -> None:
                     else:
                         print(f"⚠️ YOLO could not crop {img_data['filename']} - using full page")
 
-                except Exception as e:
+                except (OSError, RuntimeError) as e:
                     print(f"❌ Error cropping {img_data['filename']}: {e}")
+                    raise
 
             # === STEP 2.9: Run OCR for all documents with attestation fallback ===
             print("📝 Running OCR for all documents...")
@@ -425,8 +484,9 @@ def main() -> None:
                     processed_images.append(img_data)
                     print(f"✅ OCR completed: {img_data['filename']} ({img_data['label']})")
 
-                except Exception as e:
+                except (OSError, RuntimeError, ValueError) as e:
                     print(f"❌ Error processing {img_data['filename']}: {e}")
+                    raise
 
 
             classified_images = classify_images(context, image_paths)
@@ -492,6 +552,195 @@ def main() -> None:
                 resnet_label=", ".join([img["label"] for img in processed_images]),
                 google_metadata=google_metadata
 
+            # Add detected service to structured output
+            try:
+                final_structured["Requested Service"] = requested_service
+            except TypeError:
+                pass
+
+            # === STEP 4: Save everything ===
+            subject_output_dir = os.path.join(OUTPUT_DIR, subject_folder)
+            os.makedirs(subject_output_dir, exist_ok=True)
+
+            # Create comprehensive master text file
+            first_name = "Unknown"
+            
+            # Handle both string and dictionary cases for final_structured
+            if isinstance(final_structured, str):
+                try:
+                    import json
+                    final_structured = json.loads(final_structured)
+                    mother_name = final_structured.get('Mother\'s Name', 'NOT FOUND')
+                    print(f"🔍 Debug - Successfully parsed JSON, mother's name: {mother_name}")
+                except json.JSONDecodeError as e:
+                    print(f"⚠️ Could not parse final_structured as JSON: {e}")
+                    raise
+            else:
+                mother_name = final_structured.get('Mother\'s Name', 'NOT FOUND')
+                print(f"🔍 Debug - final_structured is already dict, mother's name: {mother_name}")
+
+            # Include detected service needed in structured data
+            final_structured["Service Needed"] = service_needed
+
+            full_name = final_structured.get("Full Name", "")
+            print(f"🔍 Debug - Full Name extracted: '{full_name}'")
+            
+            if full_name:
+                first_name = full_name.split()[0] if full_name else "Unknown"
+                print(f"🔍 Debug - First Name extracted: '{first_name}'")
+            else:
+                print(f"⚠️ No full name found in structured data")
+            
+            master_text_file = os.path.join(subject_output_dir, f"{first_name}_COMPLETE_DETAILS.txt")
+
+            with open(master_text_file, "w", encoding="utf-8") as f:
+                f.write("=" * 80 + "\n")
+                f.write(f"COMPLETE DOCUMENT DETAILS FOR: {full_name}\n")
+                f.write("=" * 80 + "\n\n")
+                f.write(f"SERVICE NEEDED: {service_needed}\n")
+                if sender_name:
+                    f.write(f"Sender Name: {sender_name}\n")
+                if sender_email:
+                    f.write(f"Email Address: {sender_email}\n")
+                f.write("\n")
+                # Personal Information Section
+                f.write("📋 PERSONAL INFORMATION\n")
+                f.write("-" * 40 + "\n")
+                f.write(f"Full Name: {final_structured.get('Full Name', 'N/A')}\n")
+                f.write(f"Full Name (AR): {final_structured.get('Full Name (AR)', 'N/A')}\n")
+                f.write("Father's Name: " + str(final_structured.get("Father's Name", 'N/A')) + "\n")
+                f.write("Father's Name (AR): " + str(final_structured.get("Father's Name (AR)", 'N/A')) + "\n")
+                f.write("Mother's Name: " + str(final_structured.get("Mother's Name", 'N/A')) + "\n")
+                f.write("Mother's Name (AR): " + str(final_structured.get("Mother's Name (AR)", 'N/A')) + "\n")
+                f.write(f"Date of Birth: {final_structured.get('Date of Birth', 'N/A')}\n")
+                f.write(f"Nationality: {final_structured.get('Nationality', 'N/A')}\n")
+                f.write(f"Nationality (AR): {final_structured.get('Nationality (AR)', 'N/A')}\n")
+                f.write(f"Place of Birth: {final_structured.get('Place of Birth', 'N/A')}\n")
+                f.write(f"Place of Birth (AR): {final_structured.get('Place of Birth (AR)', 'N/A')}\n\n")
+                
+                # Document Information Section
+                f.write("📄 DOCUMENT INFORMATION\n")
+                f.write("-" * 40 + "\n")
+                f.write(f"Passport Number: {final_structured.get('Passport Number', 'N/A')}\n")
+                f.write(f"EID Number: {final_structured.get('EID_Number', 'N/A')}\n")
+                f.write(f"Identity Number/File Number: {final_structured.get('Identity_Number', 'N/A')}\n")
+                f.write(f"U.I.D Number: {final_structured.get('UID_Number', 'N/A')}\n")
+                f.write(f"Passport Issue Place: {final_structured.get('Passport Issue Place', 'N/A')}\n")
+                f.write(f"Passport Issue Place (AR): {final_structured.get('Passport Issue Place (AR)', 'N/A')}\n")
+                f.write(f"Passport Issue Date: {final_structured.get('Passport Issue Date', 'N/A')}\n")
+                f.write(f"Passport Expiry Date: {final_structured.get('Passport Expiry Date', 'N/A')}\n\n")
+                
+                # Contact Information Section
+                f.write("📞 CONTACT INFORMATION\n")
+                f.write("-" * 40 + "\n")
+                f.write(f"Home Phone Number: {final_structured.get('Home Phone Number', 'N/A')}\n")
+                f.write(f"Home Address: {final_structured.get('Home Address', 'N/A')}\n")
+                f.write(f"UAE Address: {final_structured.get('UAE Address', 'N/A')}\n\n")
+                
+                # Professional Information Section
+                f.write("💼 PROFESSIONAL INFORMATION\n")
+                f.write("-" * 40 + "\n")
+                f.write(f"Job Title: {final_structured.get('Job Title', 'N/A')}\n")
+                f.write(f"Salary: {final_structured.get('Salary', 'N/A')}\n\n")
+                
+                # Enhanced Salary Information Section
+                if salary_data:
+                    f.write("💰 DETAILED SALARY BREAKDOWN\n")
+                    f.write("-" * 40 + "\n")
+                    for key, value in salary_data.items():
+                        if key == "Employment_Terms":
+                            f.write("📋 Employment Terms:\n")
+                            for term_key, term_value in value.items():
+                                f.write(f"   • {term_key.replace('_', ' ').title()}: {term_value}\n")
+                        else:
+                            f.write(f"• {key.replace('_', ' ').title()}: {value}\n")
+                    f.write("\n")
+                
+                # Attestation Information Section
+                f.write("🏛️ ATTESTATION INFORMATION\n")
+                f.write("-" * 40 + "\n")
+                f.write(f"Attestation Number 1: {final_structured.get('Attestation Number 1', 'N/A')}\n")
+                f.write(f"Attestation Number 2: {final_structured.get('Attestation Number 2', 'N/A')}\n\n")
+                
+            print(f"📄 Created comprehensive details file: {master_text_file}")
+
+            # Save individual files
+            for img_data in processed_images:
+                # Create descriptive filename based on document type and extracted first name
+                doc_type = img_data["label"]
+                
+                # Create descriptive name using first name
+                if doc_type == "passport_1":
+                    base = f"{first_name}_passport_1"
+                elif doc_type == "passport_2":
+                    base = f"{first_name}_passport_2"
+                elif doc_type == "emirates_id":
+                    base = f"{first_name}_emirates_id"
+                elif doc_type == "emirates_id_2":
+                    base = f"{first_name}_emirates_id_2"
+                elif doc_type == "personal_photo":
+                    base = f"{first_name}_personal_photo"
+                elif doc_type == "certificate":
+                    base = f"{first_name}_certificate"
+                elif doc_type in ["certificate_attestation", "attestation_label"]:
+                    # Always save the full attestation page with a consistent name
+                    base = f"{first_name}_certificate_attestation"
+                elif doc_type == "residence_cancellation":
+                    base = f"{first_name}_residence_cancellation"
+                else:
+                    base = f"{first_name}_{doc_type}"
+                
+                # Use the appropriate path for saving
+                if img_data["label"] in ["certificate_attestation", "attestation_label"] and "full_page_path" in img_data:
+                    # For attestation pages, save the full page (not the cropped label)
+                    save_path = img_data["full_page_path"]
+                elif "cropped_path" in img_data:
+                    save_path = img_data["cropped_path"]
+                elif "compressed_path" in img_data:
+                    save_path = img_data["compressed_path"]
+                else:
+                    save_path = img_data["path"]
+                
+                final_path = save_outputs(save_path, final_structured, subject_output_dir, base, gemini_response)
+                log_processed_file(LOG_FILE, img_data["filename"], final_path, img_data["label"])
+
+            # === STEP 5: Final compression of all saved files ===
+            print("🗜️ Compressing all saved files to under 110KB...")
+            for img_data in processed_images:
+                try:
+                    # Find the saved file path
+                    doc_type = img_data["label"]
+                    if doc_type == "passport_1":
+                        base = f"{first_name}_passport_1"
+                    elif doc_type == "passport_2":
+                        base = f"{first_name}_passport_2"
+                    elif doc_type == "emirates_id":
+                        base = f"{first_name}_emirates_id"
+                    elif doc_type == "emirates_id_2":
+                        base = f"{first_name}_emirates_id_2"
+                    elif doc_type == "personal_photo":
+                        base = f"{first_name}_personal_photo"
+                    elif doc_type == "certificate":
+                        base = f"{first_name}_certificate"
+                    elif doc_type in ["certificate_attestation", "attestation_label"]:
+                        # Final saved file for attestation labels should be the full page
+                        base = f"{first_name}_certificate_attestation"
+                    elif doc_type == "residence_cancellation":
+                        base = f"{first_name}_residence_cancellation"
+                    else:
+                        base = f"{first_name}_{doc_type}"
+                    
+                    # Look for the saved file
+                    saved_file = os.path.join(subject_output_dir, f"{base}.jpg")
+                    if os.path.exists(saved_file):
+                        # Compress the saved file
+                        compressed_path = compress_image_to_jpg(saved_file, saved_file)
+                        print(f"✅ Final compression: {os.path.basename(saved_file)}")
+                    
+                except (OSError, RuntimeError) as e:
+                    print(f"⚠️ Error in final compression for {img_data['filename']}: {e}")
+                    raise
+
             final_structured, gemini_response = gemini_structuring(
                 context, processed_images, salary_data, email_text, requested_service, service_needed
 
@@ -513,6 +762,16 @@ def main() -> None:
             print(f"📂 Done with folder: {subject_folder}\n{'-'*40}")
 
     print("✅ All documents processed.")
+    
+    # Open file explorer to the COMPLETED directory
+    print(f"\n📂 Opening file explorer to view processed documents...")
+    absolute_output_dir = os.path.abspath(OUTPUT_DIR)
+    try:
+        open_file_explorer(absolute_output_dir)
+    except (OSError, subprocess.SubprocessError, FileNotFoundError) as e:
+        print(f"⚠️ Could not automatically open file explorer: {e}")
+        print(f"📂 Please manually navigate to: {absolute_output_dir}")
+
     print("\n📂 Opening file explorer to view processed documents...")
     open_file_explorer(os.path.abspath(context.output_dir))
 

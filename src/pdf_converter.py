@@ -5,6 +5,22 @@ PDF conversion utilities for the MOHRE document processing pipeline.
 
 import os
 from pdf2image import convert_from_path
+from pdf2image.exceptions import (
+    PDFInfoNotInstalledError,
+    PDFPageCountError,
+    PDFPopplerTimeoutError,
+    PDFSyntaxError,
+    PopplerNotInstalledError,
+)
+
+PDF_ERRORS = (
+    PDFInfoNotInstalledError,
+    PDFPageCountError,
+    PDFPopplerTimeoutError,
+    PDFSyntaxError,
+    PopplerNotInstalledError,
+    OSError,
+)
 
 def convert_pdf_to_jpg(pdf_path: str, temp_dir: str) -> list:
     """
@@ -21,24 +37,24 @@ def convert_pdf_to_jpg(pdf_path: str, temp_dir: str) -> list:
         # Convert PDF to images
         images = convert_from_path(pdf_path)
         image_paths = []
-        
+
         for i, image in enumerate(images):
             # Create output filename
             base_name = os.path.splitext(os.path.basename(pdf_path))[0]
             jpg_filename = f"{base_name}_page{i+1}.jpg"
             jpg_path = os.path.join(temp_dir, jpg_filename)
-            
+
             # Save the image
             image.save(jpg_path, "JPEG", quality=95)
             image_paths.append(jpg_path)
-            
+
             print(f"📄 Converted page {i+1}: {jpg_filename}")
-            
+
         return image_paths
-        
-    except Exception as e:
+
+    except PDF_ERRORS as e:
         print(f"❌ Error converting PDF {pdf_path}: {e}")
-        return []
+        raise
 
 def convert_pdf_to_jpg_with_quality(pdf_path: str, temp_dir: str, quality: int = 95) -> list:
     """
@@ -56,24 +72,24 @@ def convert_pdf_to_jpg_with_quality(pdf_path: str, temp_dir: str, quality: int =
         # Convert PDF to images
         images = convert_from_path(pdf_path)
         image_paths = []
-        
+
         for i, image in enumerate(images):
             # Create output filename
             base_name = os.path.splitext(os.path.basename(pdf_path))[0]
             jpg_filename = f"{base_name}_page{i+1}.jpg"
             jpg_path = os.path.join(temp_dir, jpg_filename)
-            
+
             # Save the image with specified quality
             image.save(jpg_path, "JPEG", quality=quality)
             image_paths.append(jpg_path)
-            
+
             print(f"📄 Converted page {i+1}: {jpg_filename} (quality={quality})")
-            
+
         return image_paths
-        
-    except Exception as e:
+
+    except PDF_ERRORS as e:
         print(f"❌ Error converting PDF {pdf_path}: {e}")
-        return []
+        raise
 
 def get_pdf_page_count(pdf_path: str) -> int:
     """
@@ -95,9 +111,9 @@ def get_pdf_page_count(pdf_path: str) -> int:
                 if not images:
                     break
                 page_count += 1
-            except:
+            except PDFPageCountError:
                 break
         return page_count
-    except Exception as e:
+    except PDF_ERRORS as e:
         print(f"❌ Error getting page count for {pdf_path}: {e}")
-        return 0 
+        raise
