@@ -16,4 +16,5 @@ pdf2image
 python-docx
 python-dotenv
 pytest
+tkinterdnd2
 
