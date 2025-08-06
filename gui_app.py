@@ -9,6 +9,7 @@ import json
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import logging
+import queue
 
 # Ensure src directory is in path when running standalone
 SRC_DIR = os.path.join(os.path.dirname(__file__), "src")
@@ -90,6 +91,7 @@ class ManualProcessingWindow(tk.Toplevel):
         self.title("Manual Processing")
         self.geometry("500x400")
         self.file_paths: List[str] = []
+        self._queue: "queue.Queue[tuple[str, str]]" = queue.Queue()
 
         self.file_area: tk.Frame = tk.Frame(self, relief=tk.SUNKEN, borderwidth=1)
         self.file_area.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -109,6 +111,9 @@ class ManualProcessingWindow(tk.Toplevel):
 
         self.status_label: tk.Label = tk.Label(self, text="")
         self.status_label.pack(pady=5)
+
+        # Periodically process messages from worker threads
+        self.after(100, self._process_queue)
 
     def _browse_files(self) -> None:
         """Open a file dialog for the user to select files.
@@ -199,6 +204,18 @@ class ManualProcessingWindow(tk.Toplevel):
         ).start()
         self.status_label.config(text="Processing...")
 
+    def _process_queue(self) -> None:
+        """Handle messages from the worker thread."""
+        while not self._queue.empty():
+            msg_type, msg = self._queue.get()
+            if msg_type == "status":
+                self.status_label.config(text=msg)
+            elif msg_type == "error":
+                messagebox.showerror("Processing Error", msg)
+            elif msg_type == "info":
+                messagebox.showinfo("MOHRE", msg)
+        self.after(100, self._process_queue)
+
     def _process_files(self, paths: Iterable[str], output_dir: str) -> None:
         """Process the provided files and save structured output.
 
@@ -242,18 +259,14 @@ class ManualProcessingWindow(tk.Toplevel):
                     out_path = os.path.join(output_dir, out_name)
                     with open(out_path, "w", encoding="utf-8") as f:
                         json.dump(structured, f, ensure_ascii=False, indent=2)
-            except Exception as e:
+            except PROCESSING_ERRORS as e:
+                logger.error(f"Failed to process {file_path}: {e}")
+                self._queue.put(("error", f"Failed to process {file_path}: {e}"))
+            except Exception as e:  # pragma: no cover - runtime safeguard
                 logger.error(f"Error processing {file_path}: {e}")
 
-            except PROCESSING_ERRORS as e:
-                messagebox.showerror("Processing Error", f"Failed to process {file_path}: {e}")
-                raise
-
-            except Exception as e:  # pragma: no cover - runtime safeguard
-                print(f"Error processing {file_path}: {e}")
-
-        self.status_label.config(text="Processing complete")
-        messagebox.showinfo("MOHRE", "Manual processing completed")
+        self._queue.put(("status", "Processing complete"))
+        self._queue.put(("info", "Manual processing completed"))
 
 
 if __name__ == "__main__":  # pragma: no cover
