@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import platform
 import re
+import tempfile
 from logger import configure_logging, get_logger
 from mohre_ai.email_parser import fetch_and_store_emails
 from mohre_ai.pdf_converter import convert_pdf_to_jpg
@@ -45,16 +46,18 @@ logger = get_logger(__name__)
 # === CONFIG ===
 INPUT_DIR = "data/raw/downloads"
 OUTPUT_DIR = "data/processed/COMPLETED"
-TEMP_DIR = "data/temp"
 LOG_FILE = "logs/process_log.txt"
 
 
 @dataclass
 class PipelineContext:
     """Shared configuration for the pipeline."""
+
     input_dir: str = INPUT_DIR
     output_dir: str = OUTPUT_DIR
-    temp_dir: str = TEMP_DIR
+    # Temporary directory is generated per task using ``tempfile.mkdtemp``.
+    # The attribute is populated at runtime for each processed folder.
+    temp_dir: str = ""
     log_file: str = LOG_FILE
 
 
@@ -257,8 +260,12 @@ def save_results(context: PipelineContext, subject_folder: str, processed_images
         doc_type = img_data["label"]
         base = f"{first_name}_{doc_type}"
         save_path = img_data.get("cropped_path") or img_data.get("path")
-        final_path = save_outputs(save_path, final_structured, subject_output_dir, base, gemini_response)
-        log_processed_file(context.log_file, img_data["filename"], final_path, img_data["label"])
+        final_path = save_outputs(
+            save_path, final_structured, subject_output_dir, base, gemini_response
+        )
+        log_processed_file(
+            context.log_file, img_data["filename"], final_path, img_data["label"]
+        )
 
     for img_data in processed_images:
         doc_type = img_data["label"]
@@ -269,6 +276,8 @@ def save_results(context: PipelineContext, subject_folder: str, processed_images
 
 
 def main() -> None:
+    """Run the full document processing pipeline with isolated temp dirs."""
+
     context = PipelineContext()
     fetch_emails(context)
 
@@ -278,576 +287,103 @@ def main() -> None:
     for download_dir in download_dirs:
         if not os.path.exists(download_dir):
             logger.warning(f"⚠️ Download directory not found: {download_dir}")
-            continue            
-        logger.info(f"📁 Processing from: {download_dir}")
-        folders_to_process = os.listdir(download_dir)
-        logger.info(f"📂 Found {len(folders_to_process)} folders in {download_dir}")
-        
-        for subject_folder in folders_to_process:
-        print(f"📁 Processing from: {download_dir}")
+            continue
+
         for subject_folder in os.listdir(download_dir):
             if subject_folder in processed_folders:
                 logger.info(f"⏭️ Skipping already processed folder: {subject_folder}")
                 continue
+
             subject_path = os.path.join(download_dir, subject_folder)
             if not os.path.isdir(subject_path):
                 continue
 
-            logger.debug(f"\n🔍 Processing folder: {subject_folder}")
-            requested_service = "Unknown Service"
-            email_text_path = os.path.join(subject_path, "email_body.txt")
-            email_text = ""
-            service_needed = "N/A"
-            sender_email = ""
-            sender_name = ""
-            if os.path.exists(email_text_path):
-                with open(email_text_path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                if lines:
-                    first_line = lines[0].strip()
-                    if first_line.lower().startswith("sender:"):
-                        sender_email = first_line.split(":", 1)[1].strip()
-                        body_lines = lines[1:]
-                    else:
-                        body_lines = lines
-                    email_text = "".join(body_lines)
-                logger.info(f"📧 Email body loaded: {len(email_text)} characters")
-                match = re.search(r"(?i)service needed[:\-]\s*(.+)", email_text)
-                if match:
-                    service_needed = match.group(1).strip()
-                    logger.info(f"🔧 Service needed detected: {service_needed}")
-
-                # Attempt to derive sender name from email
-                match = re.search(r"(?i)service needed[:\-]\s*(.+)", email_text)
-                if match:
-                    service_needed = match.group(1).strip()
-                if sender_email and re.match(r"^[A-Za-z._]+@[A-Za-z0-9.-]+$", sender_email):
-                    local_part = sender_email.split("@")[0]
-                    name_parts = re.split(r"[._]", local_part)
-                    if name_parts and all(part.isalpha() for part in name_parts):
-                        sender_name = " ".join(part.capitalize() for part in name_parts)
-                try:
-                    from service_detector import detect_service_from_email
-                    requested_service = detect_service_from_email(email_text)
-                    logger.info(f"🛠️ Detected service request: {requested_service}")
-                except Exception as e:
-                    requested_service = "Unknown Service"
-                    logger.warning(f"⚠️ Service detection failed: {e}")
-                    from service_detector import detect_service_from_email, RequestException
-                except ImportError as e:
-                    requested_service = "Unknown Service"
-                    print(f"⚠️ Service detection unavailable: {e}")
-                else:
-                    try:
-                        requested_service = detect_service_from_email(email_text)
-                        print(f"🛠️ Detected service request: {requested_service}")
-                    except RequestException as e:
-                        requested_service = "Unknown Service"
-                        print(f"⚠️ Service detection failed: {e}")
-            
-            # === STEP 2.2: Convert PDFs to JPGs ===
-            logger.info("🔄 Converting PDFs to JPGs...")
-            all_image_paths = []
-            for filename in os.listdir(subject_path):
-                file_path = os.path.join(subject_path, filename)
-                if filename.lower().endswith(".pdf"):
-                    logger.info(f"📄 Converting: {filename}")
-                    jpg_paths = convert_pdf_to_jpg(file_path, TEMP_DIR)
-                    all_image_paths.extend(jpg_paths)
-                    print(f"📄 Converting: {filename}")
-                    try:
-                        jpg_paths = convert_pdf_to_jpg(file_path, TEMP_DIR)
-                        all_image_paths.extend(jpg_paths)
-                    except PDF_ERRORS as e:
-                        print(f"❌ Failed to convert {filename}: {e}")
-                        raise
-                elif filename.lower().endswith((".jpg", ".jpeg", ".png")):
-                    # Copy existing images to temp without compression (for best OCR quality)
-                    temp_path = os.path.join(TEMP_DIR, filename)
-                    shutil.copy2(file_path, temp_path)
-                    all_image_paths.append(temp_path)
-                    logger.info(f"📷 Copied image: {filename}")
-
-            if not all_image_paths:
-                logger.warning(f"⚠️ No images found in {subject_folder}")
-                continue
-
-            # === STEP 2.3: Parse salary DOCX files ===
-            logger.info("💰 Parsing salary DOCX files...")
-            salary_data = {}
-            
-            # Look for salary DOCX files
-            docx_files = [f for f in os.listdir(subject_path) if f.lower().endswith('.docx') and 'salary' in f.lower()]
-            
-
-                    from service_detector import detect_service_from_email
-                    requested_service = detect_service_from_email(email_text)
-                except Exception:
-                    requested_service = "Unknown Service"
-
-            image_paths = convert_documents(context, subject_path)
-            if not image_paths:
-                print(f"⚠️ No images found in {subject_folder}")
-                continue
-
-            salary_data: Dict = {}
-            docx_files = [f for f in os.listdir(subject_path) if f.lower().endswith(".docx") and "salary" in f.lower()]
-            for docx_file in docx_files:
-                try:
-                    docx_path = os.path.join(subject_path, docx_file)
-                    parsed_salary = parse_salary_docx(docx_path)
-                    if parsed_salary:
-                        salary_data.update(parsed_salary)
-                        logger.info(f"✅ Parsed salary from: {docx_file}")
-                        
-
-
-                        print(f"✅ Parsed salary from: {docx_file}")
-
-                        # Display salary breakdown
-                        logger.info("💰 Salary Breakdown:")
-                        for key, value in parsed_salary.items():
-                            if key == "Employment_Terms":
-                                logger.info(f"   📋 Employment Terms:")
-                                for term_key, term_value in value.items():
-                                    logger.info(f"      • {term_key.replace('_', ' ').title()}: {term_value}")
-                            else:
-                                logger.info(f"   • {key.replace('_', ' ').title()}: {value}")
-                    else:
-                        logger.warning(f"⚠️ No salary data found in: {docx_file}")
-                except Exception as e:
-                    logger.error(f"❌ Error parsing salary from {docx_file}: {e}")
-
-                        print(f"⚠️ No salary data found in: {docx_file}")
-                except (OSError, ValueError) as e:
-
-                except Exception as e:
-
-                    print(f"❌ Error parsing salary from {docx_file}: {e}")
-                    raise
-
-            # === STEP 2.4: Classify all images with ResNet ===
-            logger.info("🏷️ Classifying images with ResNet...")
-            classified_images = []
-            for img_path in all_image_paths:
-                try:
-                    resnet_label = classify_image_resnet(img_path)
-                    classified_images.append({
-                        "path": img_path,
-                        "label": resnet_label,
-                        "filename": os.path.basename(img_path)
-                    })
-                    logger.info(f"✅ {os.path.basename(img_path)} → {resnet_label}")
-                except Exception as e:
-                    logger.error(f"❌ Error classifying {os.path.basename(img_path)}: {e}")
-
-                    print(f"✅ {os.path.basename(img_path)} → {resnet_label}")
-                except (OSError, RuntimeError) as e:
-                    print(f"❌ Error classifying {os.path.basename(img_path)}: {e}")
-                    raise
-
-            # === STEP 2.5: Ensure certificate + attestation pairing ===
-            has_certificate = any(img["label"] == "certificate" for img in classified_images)
-            has_attestation = any(img["label"] in ["certificate_attestation", "attestation_label"] for img in classified_images)
-            
-            if has_certificate and not has_attestation:
-                logger.warning("⚠️ Certificate found but no attestation page. Looking for misclassified attestation...")
-                for img_data in classified_images:
-                    if img_data["label"] in ["emirates_id", "emirates_id_2", "unknown"]:
-                        # Reclassify as attestation_label for further processing
-                        img_data["label"] = "attestation_label"
-                        logger.info(f"🔄 Reclassified {img_data['filename']} as attestation_label")
-
-            # === STEP 2.6: Rotate images if needed using Gemini 2.5 Flash (only specific document types) ===
-            logger.info("🔄 Using Gemini 2.5 Flash to check and rotate images if needed...")
-            
-            # Only check rotation for specific document types after classification
-            rotation_check_types = ["passport_1", "passport_2", "personal_photo", "certificate"]
-            
-            for img_data in classified_images:
-                try:
-                    # Only check rotation for specific document types
-                    if img_data["label"] in rotation_check_types:
-                        logger.debug(f"🔍 Checking rotation for {img_data['filename']} ({img_data['label']})...")
-                        rotated_path = rotate_if_needed(img_data["path"])
-                        if rotated_path != img_data["path"]:
-                            img_data["path"] = rotated_path
-                            logger.info(f"✅ Gemini 2.5 Flash rotated {img_data['filename']} ({img_data['label']})")
-                        else:
-                            logger.info(f"✅ No rotation needed for {img_data['filename']} ({img_data['label']})")
-                    else:
-                        logger.info(f"⏭️ Skipping rotation check for {img_data['filename']} ({img_data['label']}) - not in rotation check list")
-                except Exception as e:
-                    logger.warning(f"⚠️ Error rotating {img_data['filename']}: {e}")
-                        print(f"⏭️ Skipping rotation check for {img_data['filename']} ({img_data['label']}) - not in rotation check list")
-                except (OSError, RuntimeError) as e:
-                    print(f"⚠️ Error rotating {img_data['filename']}: {e}")
-                    raise
-
-            # === STEP 2.7: If ResNet detects attestation page, keep original for downstream processing ===
-            logger.info("📋 Checking for attestation pages detected by ResNet...")
-            attestation_images = [img for img in classified_images if img["label"] in ["certificate_attestation", "attestation_label"]]
-
-            for attestation_img in attestation_images:
-                try:
-                    # Use the original, uncompressed page for all downstream processing
-                    attestation_img["full_page_path"] = attestation_img["path"]
-                    logger.info(f"ℹ️ Using uncompressed attestation page: {os.path.basename(attestation_img['path'])}")
-                except Exception as e:
-                    logger.error(f"❌ Error processing attestation {attestation_img['filename']}: {e}")
-                    print(f"ℹ️ Using uncompressed attestation page: {os.path.basename(attestation_img['path'])}")
-                except (OSError, KeyError) as e:
-                    print(f"❌ Error processing attestation {attestation_img['filename']}: {e}")
-                    raise
-            # === STEP 2.8: Run YOLO cropping for all documents ===
-            logger.info("✂️ Running YOLO cropping for all documents...")
-            for img_data in classified_images:
-                try:
-                    # Use the current image path (some may be uncompressed)
-                    input_path = img_data["path"]
-
-                    # Run YOLO cropping for all documents
-                    cropped_path = run_yolo_crop(input_path, TEMP_DIR)
-                    if cropped_path:
-                        img_data["cropped_path"] = cropped_path
-                        logger.info(f"✅ YOLO cropped {img_data['label']}: {os.path.basename(cropped_path)}")
-                    else:
-                        logger.warning(f"⚠️ YOLO could not crop {img_data['filename']} - using full page")
-
-                except Exception as e:
-                    logger.error(f"❌ Error cropping {img_data['filename']}: {e}")
-                except (OSError, RuntimeError) as e:
-                    print(f"❌ Error cropping {img_data['filename']}: {e}")
-                    raise
-
-            # === STEP 2.9: Run OCR for all documents with attestation fallback ===
-            logger.info("📝 Running OCR for all documents...")
-            processed_images = []
-
-            for img_data in classified_images:
-                try:
-                    # Use cropped path if available, otherwise fall back to the full page
-                    ocr_path = img_data.get("cropped_path") or img_data.get("full_page_path") or img_data["path"]
-
-                    if img_data["label"] in ["certificate_attestation", "attestation_label"]:
-                        if "cropped_path" in img_data:
-                            logger.debug(f"🔍 Running OCR on attestation label: {img_data['filename']}")
-                        else:
-                            logger.warning(f"⚠️ YOLO failed to crop label for {img_data['filename']} - using full page for OCR")
-
-                    # Run OCR
-                    vision_data = run_enhanced_ocr(ocr_path)
-                    img_data["ocr_text"] = vision_data.get("ocr_text", "")
-                    img_data["extracted_fields"] = vision_data.get("extracted_fields", {})
-                    img_data["document_type"] = vision_data.get("document_type", "unknown")
-                    img_data["confidence"] = vision_data.get("confidence", 0.0)
-
-                    processed_images.append(img_data)
-                    logger.info(f"✅ OCR completed: {img_data['filename']} ({img_data['label']})")
-
-                except Exception as e:
-                    logger.error(f"❌ Error processing {img_data['filename']}: {e}")
-                except (OSError, RuntimeError, ValueError) as e:
-                    print(f"❌ Error processing {img_data['filename']}: {e}")
-                    raise
-
-
-            classified_images = classify_images(context, image_paths)
-            processed_images = perform_ocr(context, classified_images)
-            if not processed_images:
-                logger.warning(f"⚠️ No processed images for {subject_folder}. Skipping folder.")
-                continue
-
-            # === STEP 3: Comprehensive Gemini structuring ===
-            logger.info(f"🧠 Running comprehensive Gemini structuring for {subject_folder}...")
-            
-            # Collect OCR data by document type
-            passport_ocr_1 = ""
-            passport_ocr_2 = ""
-            emirates_id_ocr = ""
-            emirates_id_2_ocr = ""
-            employee_info = ""
-            certificate_ocr = ""
-            google_metadata = {}
-            
-            for img_data in processed_images:
-                ocr_text = img_data.get("ocr_text", "")
-                extracted_fields = img_data.get("extracted_fields", {})
-                
-                if img_data["label"] == "passport_1":
-                    passport_ocr_1 = ocr_text
-                    if extracted_fields:
-                        google_metadata["passport_1_fields"] = extracted_fields
-                elif img_data["label"] == "passport_2":
-                    passport_ocr_2 = ocr_text
-                    if extracted_fields:
-                        google_metadata["passport_2_fields"] = extracted_fields
-                elif img_data["label"] == "emirates_id":
-                    emirates_id_ocr = ocr_text
-                    if extracted_fields:
-                        google_metadata["emirates_id_fields"] = extracted_fields
-                elif img_data["label"] == "emirates_id_2":
-                    emirates_id_2_ocr = ocr_text
-                    if extracted_fields:
-                        google_metadata["emirates_id_2_fields"] = extracted_fields
-                elif img_data["label"] == "employee_info_form":
-                    employee_info = ocr_text
-                    if extracted_fields:
-                        google_metadata["employee_info_fields"] = extracted_fields
-                elif img_data["label"] == "certificate":
-                    certificate_ocr = ocr_text
-                    if extracted_fields:
-                        google_metadata["certificate_fields"] = extracted_fields
-                elif img_data["label"] in ["certificate_attestation", "attestation_label"] and ocr_text:
-                    certificate_ocr = ocr_text
-                    if extracted_fields:
-                        google_metadata["certificate_fields"] = extracted_fields
-
-            result = structure_with_gemini(
-                passport_ocr_1=passport_ocr_1,
-                passport_ocr_2=passport_ocr_2,
-                emirates_id_ocr=emirates_id_ocr,
-                emirates_id_2_ocr=emirates_id_2_ocr,
-                employee_info=employee_info,
-                certificate_ocr=certificate_ocr,
-                salary_data=salary_data,  # Use the parsed salary data
-                email_text=email_text,
-                resnet_label=", ".join([img["label"] for img in processed_images]),
-                google_metadata=google_metadata
-
-            # Add detected service to structured output
+            context.temp_dir = tempfile.mkdtemp(prefix="mohre_")
             try:
-                final_structured["Requested Service"] = requested_service
-            except TypeError:
-                pass
+                image_paths = convert_documents(context, subject_path)
+                if not image_paths:
+                    logger.warning(f"⚠️ No images found in {subject_folder}")
+                    continue
 
-            # === STEP 4: Save everything ===
-            subject_output_dir = os.path.join(OUTPUT_DIR, subject_folder)
-            os.makedirs(subject_output_dir, exist_ok=True)
+                classified = classify_images(context, image_paths)
+                processed = perform_ocr(context, classified)
 
-            # Create comprehensive master text file
-            first_name = "Unknown"
-            
-            # Handle both string and dictionary cases for final_structured
-            if isinstance(final_structured, str):
-                try:
-                    import json
-                    final_structured = json.loads(final_structured)
-                    mother_name = final_structured.get('Mother\'s Name', 'NOT FOUND')
-                    logger.debug(f"🔍 Debug - Successfully parsed JSON, mother's name: {mother_name}")
-                except Exception as e:
-                    logger.warning(f"⚠️ Could not parse final_structured as JSON: {e}")
-                    logger.warning(f"⚠️ Raw final_structured: {final_structured[:200]}...")
-                    final_structured = {}
-                    print(f"🔍 Debug - Successfully parsed JSON, mother's name: {mother_name}")
-                except json.JSONDecodeError as e:
-                    print(f"⚠️ Could not parse final_structured as JSON: {e}")
-                    raise
-            else:
-                mother_name = final_structured.get('Mother\'s Name', 'NOT FOUND')
-                logger.debug(f"🔍 Debug - final_structured is already dict, mother's name: {mother_name}")
+                salary_data: Dict = {}
+                docx_files = [
+                    f
+                    for f in os.listdir(subject_path)
+                    if f.lower().endswith(".docx") and "salary" in f.lower()
+                ]
+                for docx_file in docx_files:
+                    try:
+                        docx_path = os.path.join(subject_path, docx_file)
+                        parsed_salary = parse_salary_docx(docx_path)
+                        if parsed_salary:
+                            salary_data.update(parsed_salary)
+                    except Exception as e:
+                        logger.error(f"❌ Error parsing salary from {docx_file}: {e}")
 
-            # Include detected service needed in structured data
-            final_structured["Service Needed"] = service_needed
+                email_text = ""
+                requested_service = "Unknown Service"
+                service_needed = "N/A"
+                sender_email = ""
+                sender_name = ""
+                email_text_path = os.path.join(subject_path, "email_body.txt")
+                if os.path.exists(email_text_path):
+                    with open(email_text_path, "r", encoding="utf-8") as f:
+                        lines = f.readlines()
+                    if lines:
+                        first_line = lines[0].strip()
+                        if first_line.lower().startswith("sender:"):
+                            sender_email = first_line.split(":", 1)[1].strip()
+                            lines = lines[1:]
+                        email_text = "".join(lines)
+                    match = re.search(r"(?i)service needed[:\-]\s*(.+)", email_text)
+                    if match:
+                        service_needed = match.group(1).strip()
+                    try:
+                        from service_detector import detect_service_from_email
 
-            full_name = final_structured.get("Full Name", "")
-            logger.debug(f"🔍 Debug - Full Name extracted: '{full_name}'")
-            
-            if full_name:
-                first_name = full_name.split()[0] if full_name else "Unknown"
-                logger.debug(f"🔍 Debug - First Name extracted: '{first_name}'")
-            else:
-                logger.warning(f"⚠️ No full name found in structured data")
-            
-            master_text_file = os.path.join(subject_output_dir, f"{first_name}_COMPLETE_DETAILS.txt")
+                        requested_service = detect_service_from_email(email_text)
+                    except Exception as e:
+                        logger.warning(f"⚠️ Service detection failed: {e}")
 
-            with open(master_text_file, "w", encoding="utf-8") as f:
-                f.write("=" * 80 + "\n")
-                f.write(f"COMPLETE DOCUMENT DETAILS FOR: {full_name}\n")
-                f.write("=" * 80 + "\n\n")
-                f.write(f"SERVICE NEEDED: {service_needed}\n")
-                if sender_name:
-                    f.write(f"Sender Name: {sender_name}\n")
-                if sender_email:
-                    f.write(f"Email Address: {sender_email}\n")
-                f.write("\n")
-                # Personal Information Section
-                f.write("📋 PERSONAL INFORMATION\n")
-                f.write("-" * 40 + "\n")
-                f.write(f"Full Name: {final_structured.get('Full Name', 'N/A')}\n")
-                f.write(f"Full Name (AR): {final_structured.get('Full Name (AR)', 'N/A')}\n")
-                f.write("Father's Name: " + str(final_structured.get("Father's Name", 'N/A')) + "\n")
-                f.write("Father's Name (AR): " + str(final_structured.get("Father's Name (AR)", 'N/A')) + "\n")
-                f.write("Mother's Name: " + str(final_structured.get("Mother's Name", 'N/A')) + "\n")
-                f.write("Mother's Name (AR): " + str(final_structured.get("Mother's Name (AR)", 'N/A')) + "\n")
-                f.write(f"Date of Birth: {final_structured.get('Date of Birth', 'N/A')}\n")
-                f.write(f"Nationality: {final_structured.get('Nationality', 'N/A')}\n")
-                f.write(f"Nationality (AR): {final_structured.get('Nationality (AR)', 'N/A')}\n")
-                f.write(f"Place of Birth: {final_structured.get('Place of Birth', 'N/A')}\n")
-                f.write(f"Place of Birth (AR): {final_structured.get('Place of Birth (AR)', 'N/A')}\n\n")
-                
-                # Document Information Section
-                f.write("📄 DOCUMENT INFORMATION\n")
-                f.write("-" * 40 + "\n")
-                f.write(f"Passport Number: {final_structured.get('Passport Number', 'N/A')}\n")
-                f.write(f"EID Number: {final_structured.get('EID_Number', 'N/A')}\n")
-                f.write(f"Identity Number/File Number: {final_structured.get('Identity_Number', 'N/A')}\n")
-                f.write(f"U.I.D Number: {final_structured.get('UID_Number', 'N/A')}\n")
-                f.write(f"Passport Issue Place: {final_structured.get('Passport Issue Place', 'N/A')}\n")
-                f.write(f"Passport Issue Place (AR): {final_structured.get('Passport Issue Place (AR)', 'N/A')}\n")
-                f.write(f"Passport Issue Date: {final_structured.get('Passport Issue Date', 'N/A')}\n")
-                f.write(f"Passport Expiry Date: {final_structured.get('Passport Expiry Date', 'N/A')}\n\n")
-                
-                # Contact Information Section
-                f.write("📞 CONTACT INFORMATION\n")
-                f.write("-" * 40 + "\n")
-                f.write(f"Home Phone Number: {final_structured.get('Home Phone Number', 'N/A')}\n")
-                f.write(f"Home Address: {final_structured.get('Home Address', 'N/A')}\n")
-                f.write(f"UAE Address: {final_structured.get('UAE Address', 'N/A')}\n\n")
-                
-                # Professional Information Section
-                f.write("💼 PROFESSIONAL INFORMATION\n")
-                f.write("-" * 40 + "\n")
-                f.write(f"Job Title: {final_structured.get('Job Title', 'N/A')}\n")
-                f.write(f"Salary: {final_structured.get('Salary', 'N/A')}\n\n")
-                
-                # Enhanced Salary Information Section
-                if salary_data:
-                    f.write("💰 DETAILED SALARY BREAKDOWN\n")
-                    f.write("-" * 40 + "\n")
-                    for key, value in salary_data.items():
-                        if key == "Employment_Terms":
-                            f.write("📋 Employment Terms:\n")
-                            for term_key, term_value in value.items():
-                                f.write(f"   • {term_key.replace('_', ' ').title()}: {term_value}\n")
-                        else:
-                            f.write(f"• {key.replace('_', ' ').title()}: {value}\n")
-                    f.write("\n")
-                
-                # Attestation Information Section
-                f.write("🏛️ ATTESTATION INFORMATION\n")
-                f.write("-" * 40 + "\n")
-                f.write(f"Attestation Number 1: {final_structured.get('Attestation Number 1', 'N/A')}\n")
-                f.write(f"Attestation Number 2: {final_structured.get('Attestation Number 2', 'N/A')}\n\n")
-                
-            logger.info(f"📄 Created comprehensive details file: {master_text_file}")
+                    if sender_email and re.match(
+                        r"^[A-Za-z._]+@[A-Za-z0-9.-]+$", sender_email
+                    ):
+                        local_part = sender_email.split("@")[0]
+                        name_parts = re.split(r"[._]", local_part)
+                        if name_parts and all(part.isalpha() for part in name_parts):
+                            sender_name = " ".join(
+                                part.capitalize() for part in name_parts
+                            )
 
-            # Save individual files
-            for img_data in processed_images:
-                # Create descriptive filename based on document type and extracted first name
-                doc_type = img_data["label"]
-                
-                # Create descriptive name using first name
-                if doc_type == "passport_1":
-                    base = f"{first_name}_passport_1"
-                elif doc_type == "passport_2":
-                    base = f"{first_name}_passport_2"
-                elif doc_type == "emirates_id":
-                    base = f"{first_name}_emirates_id"
-                elif doc_type == "emirates_id_2":
-                    base = f"{first_name}_emirates_id_2"
-                elif doc_type == "personal_photo":
-                    base = f"{first_name}_personal_photo"
-                elif doc_type == "certificate":
-                    base = f"{first_name}_certificate"
-                elif doc_type in ["certificate_attestation", "attestation_label"]:
-                    # Always save the full attestation page with a consistent name
-                    base = f"{first_name}_certificate_attestation"
-                elif doc_type == "residence_cancellation":
-                    base = f"{first_name}_residence_cancellation"
-                else:
-                    base = f"{first_name}_{doc_type}"
-                
-                # Use the appropriate path for saving
-                if img_data["label"] in ["certificate_attestation", "attestation_label"] and "full_page_path" in img_data:
-                    # For attestation pages, save the full page (not the cropped label)
-                    save_path = img_data["full_page_path"]
-                elif "cropped_path" in img_data:
-                    save_path = img_data["cropped_path"]
-                elif "compressed_path" in img_data:
-                    save_path = img_data["compressed_path"]
-                else:
-                    save_path = img_data["path"]
-                
-                final_path = save_outputs(save_path, final_structured, subject_output_dir, base, gemini_response)
-                log_processed_file(LOG_FILE, img_data["filename"], final_path, img_data["label"])
+                structured, gemini_response = gemini_structuring(
+                    context,
+                    processed,
+                    salary_data,
+                    email_text,
+                    requested_service,
+                    service_needed,
+                )
+                save_results(
+                    context,
+                    subject_folder,
+                    processed,
+                    structured,
+                    gemini_response,
+                    salary_data,
+                    service_needed,
+                    sender_email,
+                    sender_name,
+                )
+                processed_folders.add(subject_folder)
+                logger.info(f"✅ Completed processing for: {subject_folder}")
+            finally:
+                shutil.rmtree(context.temp_dir, ignore_errors=True)
 
-            # === STEP 5: Final compression of all saved files ===
-            logger.info("🗜️ Compressing all saved files to under 110KB...")
-            for img_data in processed_images:
-                try:
-                    # Find the saved file path
-                    doc_type = img_data["label"]
-                    if doc_type == "passport_1":
-                        base = f"{first_name}_passport_1"
-                    elif doc_type == "passport_2":
-                        base = f"{first_name}_passport_2"
-                    elif doc_type == "emirates_id":
-                        base = f"{first_name}_emirates_id"
-                    elif doc_type == "emirates_id_2":
-                        base = f"{first_name}_emirates_id_2"
-                    elif doc_type == "personal_photo":
-                        base = f"{first_name}_personal_photo"
-                    elif doc_type == "certificate":
-                        base = f"{first_name}_certificate"
-                    elif doc_type in ["certificate_attestation", "attestation_label"]:
-                        # Final saved file for attestation labels should be the full page
-                        base = f"{first_name}_certificate_attestation"
-                    elif doc_type == "residence_cancellation":
-                        base = f"{first_name}_residence_cancellation"
-                    else:
-                        base = f"{first_name}_{doc_type}"
-                    
-                    # Look for the saved file
-                    saved_file = os.path.join(subject_output_dir, f"{base}.jpg")
-                    if os.path.exists(saved_file):
-                        # Compress the saved file
-                        compressed_path = compress_image_to_jpg(saved_file, saved_file)
-                        logger.info(f"✅ Final compression: {os.path.basename(saved_file)}")
-                    
-                except Exception as e:
-                    logger.warning(f"⚠️ Error in final compression for {img_data['filename']}: {e}")
-
-                except (OSError, RuntimeError) as e:
-                    print(f"⚠️ Error in final compression for {img_data['filename']}: {e}")
-                    raise
-
-            final_structured, gemini_response = gemini_structuring(
-                context, processed_images, salary_data, email_text, requested_service, service_needed
-
-            )
-
-            save_results(
-                context,
-                subject_folder,
-                processed_images,
-                final_structured,
-                gemini_response,
-                salary_data,
-                service_needed,
-                sender_email,
-                sender_name,
-            )
-
-            processed_folders.add(subject_folder)
-            logger.info(f"📂 Done with folder: {subject_folder}\n{'-'*40}")
-
-    logger.info("✅ All documents processed.")
-    
-    # Open file explorer to the COMPLETED directory
-    logger.info(f"\n📂 Opening file explorer to view processed documents...")
-    absolute_output_dir = os.path.abspath(OUTPUT_DIR)
+    logger.info("🎉 All folders processed!")
     try:
-        open_file_explorer(absolute_output_dir)
-    except (OSError, subprocess.SubprocessError, FileNotFoundError) as e:
-        print(f"⚠️ Could not automatically open file explorer: {e}")
-        print(f"📂 Please manually navigate to: {absolute_output_dir}")
-
-    print("\n📂 Opening file explorer to view processed documents...")
-    open_file_explorer(os.path.abspath(context.output_dir))
-
-
-if __name__ == "__main__":
-    configure_logging()
-    main()
-
+        open_file_explorer(context.output_dir)
+    except Exception as e:
+        logger.warning(f"⚠️ Could not open output folder: {e}")
