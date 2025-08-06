@@ -2,7 +2,6 @@
 """GUI application for MOHRE document processing."""
 
 import os
-import sys
 import shutil
 import threading
 import json
@@ -16,14 +15,10 @@ try:
 except Exception:
     TKDND_AVAILABLE = False
 
-# Ensure src directory is in path when running standalone
-if os.path.join(os.path.dirname(__file__), "src") not in sys.path:
-    sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
-
-from main_pipeline import main as run_full_pipeline
-from pdf_converter import convert_pdf_to_jpg
-from yolo_crop_ocr_pipeline import run_yolo_crop, run_enhanced_ocr
-from structure_with_gemini import structure_with_gemini
+from mohre_ai.main_pipeline import main as run_full_pipeline
+from mohre_ai.pdf_converter import convert_pdf_to_jpg
+from mohre_ai.yolo_crop_ocr_pipeline import run_yolo_crop, run_enhanced_ocr
+from mohre_ai.structure_with_gemini import structure_with_gemini
 
 TEMP_DIR = os.path.join("data", "temp")
 
